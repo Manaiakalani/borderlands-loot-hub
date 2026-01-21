@@ -34,6 +34,76 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  */
 export const mockShiftCodes: ShiftCode[] = [
   // ============================================
+  // TWITTER - Auto-fetched Codes (2026-01-21)
+  // ============================================
+  {
+    id: 'twitter-1769037702648-0',
+    code: '39FJB-CT5S3-5FTTW-BBB3J-F3HKZ',
+    game: 'TPS',
+    status: 'unknown',
+    reward: 'Cosmetic Reward',
+    rewardType: 'skin',
+    source: 'Twitter @Borderlands (Official)',
+    addedAt: '2025-12-30',
+    isUniversal: false,
+  },
+  {
+    id: 'twitter-1769037702648-1',
+    code: '396J3-6ZJ9J-KRJTW-TJ3BT-XK5H9',
+    game: 'TPS',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'golden-keys',
+    source: 'Twitter @Borderlands (Official)',
+    addedAt: '2025-12-29',
+    isUniversal: false,
+  },
+  {
+    id: 'twitter-1769037702648-2',
+    code: '3HX3J-RJWSJ-CFBBC-3BJ3B-RWZ36',
+    game: 'TPS',
+    status: 'unknown',
+    reward: 'Cosmetic Reward',
+    rewardType: 'skin',
+    source: 'Twitter @Borderlands (Official)',
+    addedAt: '2025-12-27',
+    isUniversal: false,
+  },
+  {
+    id: 'twitter-1769037702648-3',
+    code: 'TSXBB-W9JH3-W63JC-TT33B-95JSX',
+    game: 'TPS',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'golden-keys',
+    source: 'Twitter @Borderlands (Official)',
+    addedAt: '2025-12-26',
+    isUniversal: false,
+  },
+  {
+    id: 'twitter-1769037702648-4',
+    code: 'BZ6J3-3JKHB-CX3B5-TTJTT-HJBZW',
+    game: 'TPS',
+    status: 'unknown',
+    reward: 'Cosmetic Reward',
+    rewardType: 'skin',
+    source: 'Twitter @Borderlands (Official)',
+    addedAt: '2025-12-24',
+    isUniversal: false,
+  },
+  {
+    id: 'twitter-1769037702648-5',
+    code: '3H6JT-3ZJZ3-KXBJK-TB3TB-J33CX',
+    game: 'TPS',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'golden-keys',
+    source: 'Twitter @Borderlands (Official)',
+    addedAt: '2025-12-23',
+    isUniversal: false,
+  },
+
+  // ============================================
   // BORDERLANDS 3 - Active Codes
   // ============================================
   {
