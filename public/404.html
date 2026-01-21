@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content="0;url=/borderlands-loot-hub/" />
+    <script>
+      // Single Page App redirect for GitHub Pages
+      // Redirects all 404s to index.html for client-side routing
+      const path = window.location.pathname;
+      const repo = '/borderlands-loot-hub';
+      if (path.startsWith(repo)) {
+        // Store the path for the app to handle
+        sessionStorage.setItem('redirect', path);
+      }
+      window.location.replace(repo + '/');
+    </script>
+    <title>Redirecting...</title>
+  </head>
+  <body>
+    <p>Redirecting to <a href="/borderlands-loot-hub/">Borderlands Loot Hub</a>...</p>
+  </body>
+</html>
