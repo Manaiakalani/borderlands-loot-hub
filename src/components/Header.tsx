@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { ExternalLink, Key, RefreshCw, AlertTriangle, Clock } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ExternalLink, Key, RefreshCw, AlertTriangle, Clock, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -132,6 +133,25 @@ export const Header = memo(function Header({
                         </p>
                       )}
                     </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-primary"
+                    >
+                      <Link to="/about" aria-label="About SHiFT Vault">
+                        <Info className="w-5 h-5" aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>About & How to Redeem</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

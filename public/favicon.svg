@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="keyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#F5B800"/>
+      <stop offset="100%" style="stop-color:#FF8C00"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="#1a1a2e" stroke="#F5B800" stroke-width="3"/>
+  
+  <!-- Vault symbol / Key design -->
+  <g filter="url(#glow)">
+    <!-- Key head (vault gear shape) -->
+    <circle cx="50" cy="35" r="18" fill="none" stroke="url(#keyGradient)" stroke-width="5"/>
+    <circle cx="50" cy="35" r="10" fill="#1a1a2e"/>
+    
+    <!-- Key teeth -->
+    <path d="M50 53 L50 85" stroke="url(#keyGradient)" stroke-width="6" stroke-linecap="round"/>
+    <path d="M50 70 L60 70 L60 75" stroke="url(#keyGradient)" stroke-width="4" stroke-linecap="round" fill="none"/>
+    <path d="M50 80 L58 80 L58 85" stroke="url(#keyGradient)" stroke-width="4" stroke-linecap="round" fill="none"/>
+    
+    <!-- Decorative notches on key head -->
+    <circle cx="50" cy="21" r="3" fill="url(#keyGradient)"/>
+    <circle cx="38" cy="28" r="3" fill="url(#keyGradient)"/>
+    <circle cx="62" cy="28" r="3" fill="url(#keyGradient)"/>
+    <circle cx="38" cy="42" r="3" fill="url(#keyGradient)"/>
+    <circle cx="62" cy="42" r="3" fill="url(#keyGradient)"/>
+  </g>
+</svg>

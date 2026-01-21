@@ -9,7 +9,7 @@
 
 **A sleek, Borderlands-themed SHiFT code aggregator for Vault Hunters**
 
-[Live Demo](#) • [Report Bug](https://github.com/Manaiakalani/borderlands-loot-hub/issues) • [Request Feature](https://github.com/Manaiakalani/borderlands-loot-hub/issues)
+[🎮 Live Demo](https://manaiakalani.github.io/borderlands-loot-hub/) • [Report Bug](https://github.com/Manaiakalani/borderlands-loot-hub/issues) • [Request Feature](https://github.com/Manaiakalani/borderlands-loot-hub/issues)
 
 </div>
 
