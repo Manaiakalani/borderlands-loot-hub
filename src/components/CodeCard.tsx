@@ -176,8 +176,8 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
           
           {code.status !== 'expired' && (
             <Button
-              variant="ghost"
-              size="icon"
+              variant="secondary"
+              size="sm"
               asChild
               className="text-muted-foreground hover:text-primary"
             >
@@ -186,7 +186,8 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <ExternalLink className="w-4 h-4" />
+                Redeem
+                <ExternalLink className="w-4 h-4 ml-1" />
               </a>
             </Button>
           )}
