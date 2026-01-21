@@ -23,6 +23,11 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
   WONDERLANDS: { name: 'Tiny Tina\'s Wonderlands', shortName: 'TTW', color: 'hsl(320 70% 60%)' },
 };
 
+// Get today's date for mock "new today" codes
+const today = new Date().toISOString().split('T')[0];
+const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString().split('T')[0];
+
 // Mock data representing aggregated SHiFT codes
 export const mockShiftCodes: ShiftCode[] = [
   {
@@ -35,7 +40,7 @@ export const mockShiftCodes: ShiftCode[] = [
     keys: 3,
     expiresAt: '2025-02-15',
     source: '@Borderlands',
-    addedAt: '2025-01-20',
+    addedAt: today,
   },
   {
     id: '2',
@@ -46,7 +51,7 @@ export const mockShiftCodes: ShiftCode[] = [
     rewardType: 'golden-keys',
     keys: 1,
     source: 'shift.orcicorn.com',
-    addedAt: '2025-01-19',
+    addedAt: today,
   },
   {
     id: '3',
@@ -69,7 +74,7 @@ export const mockShiftCodes: ShiftCode[] = [
     rewardType: 'golden-keys',
     keys: 5,
     source: '@Borderlands',
-    addedAt: '2025-01-18',
+    addedAt: yesterday,
   },
   {
     id: '5',
@@ -80,7 +85,7 @@ export const mockShiftCodes: ShiftCode[] = [
     rewardType: 'golden-keys',
     keys: 1,
     source: 'mentalmars.com',
-    addedAt: '2025-01-17',
+    addedAt: twoDaysAgo,
   },
   {
     id: '6',
@@ -102,7 +107,7 @@ export const mockShiftCodes: ShiftCode[] = [
     rewardType: 'golden-keys',
     keys: 1,
     source: '@PlayWonderlands',
-    addedAt: '2025-01-20',
+    addedAt: today,
   },
   {
     id: '8',

@@ -2,20 +2,37 @@ import { useState, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { FilterBar } from '@/components/FilterBar';
 import { CodeList } from '@/components/CodeList';
+import { NewTodaySection } from '@/components/NewTodaySection';
 import { Footer } from '@/components/Footer';
-import { mockShiftCodes, GameType, CodeStatus } from '@/data/shiftCodes';
+import { useShiftCodes } from '@/hooks/useShiftCodes';
+import { GameType, CodeStatus } from '@/data/shiftCodes';
+import { Loader2, Clock } from 'lucide-react';
 
 const Index = () => {
   const [selectedGame, setSelectedGame] = useState<GameType | 'ALL'>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<CodeStatus | 'ALL'>('ALL');
+  
+  const { 
+    codes, 
+    isLoading, 
+    lastFetched, 
+    refresh, 
+    newTodayCodes,
+    activeCodes,
+    isNewToday,
+    isRecent,
+  } = useShiftCodes();
+
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Filter codes based on selection
   const filteredCodes = useMemo(() => {
-    return mockShiftCodes.filter((code) => {
+    return codes.filter((code) => {
       const gameMatch = selectedGame === 'ALL' || code.game === selectedGame;
       const statusMatch = selectedStatus === 'ALL' || code.status === selectedStatus;
-      return gameMatch && statusMatch;
+      // Exclude "new today" codes from main list when showing all
+      const notInNewSection = selectedGame !== 'ALL' || selectedStatus !== 'ALL' || !isNewToday(code);
+      return gameMatch && statusMatch && notInNewSection;
     }).sort((a, b) => {
       // Sort by status (active first) then by date
       const statusOrder = { active: 0, unknown: 1, expired: 2 };
@@ -23,15 +40,16 @@ const Index = () => {
       if (statusDiff !== 0) return statusDiff;
       return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
     });
-  }, [selectedGame, selectedStatus]);
+  }, [codes, selectedGame, selectedStatus, isNewToday]);
 
-  const activeCodes = mockShiftCodes.filter((c) => c.status === 'active').length;
-
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Simulate refresh
-    setTimeout(() => setIsRefreshing(false), 1500);
+    await refresh();
+    setIsRefreshing(false);
   };
+
+  // Show "New Today" section only when viewing all codes
+  const showNewTodaySection = selectedGame === 'ALL' && selectedStatus === 'ALL' && newTodayCodes.length > 0;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -43,13 +61,31 @@ const Index = () => {
       </div>
 
       <Header
-        totalCodes={mockShiftCodes.length}
+        totalCodes={codes.length}
         activeCodes={activeCodes}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
       />
 
       <main className="flex-1 container py-6 space-y-6">
+        {/* Last fetched indicator */}
+        {lastFetched && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground animate-fade-in">
+            <Clock className="w-3 h-3" />
+            <span>
+              Last updated: {lastFetched.toLocaleTimeString()}
+              {' • '}
+              <button 
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="text-primary hover:underline transition-colors"
+              >
+                {isRefreshing ? 'Refreshing...' : 'Refresh now'}
+              </button>
+            </span>
+          </div>
+        )}
+
         <FilterBar
           selectedGame={selectedGame}
           selectedStatus={selectedStatus}
@@ -57,14 +93,34 @@ const Index = () => {
           onStatusChange={setSelectedStatus}
         />
 
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground">
-              {filteredCodes.length} {filteredCodes.length === 1 ? 'Code' : 'Codes'} Found
-            </h2>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-16 animate-fade-in">
+            <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+            <p className="text-muted-foreground">Loading SHiFT codes...</p>
           </div>
-          <CodeList codes={filteredCodes} />
-        </div>
+        ) : (
+          <div className="space-y-8">
+            {/* New Today Section */}
+            {showNewTodaySection && (
+              <NewTodaySection codes={newTodayCodes} />
+            )}
+
+            {/* All Codes Section */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-foreground">
+                  {showNewTodaySection ? 'All Codes' : `${filteredCodes.length} ${filteredCodes.length === 1 ? 'Code' : 'Codes'} Found`}
+                </h2>
+                {showNewTodaySection && (
+                  <span className="text-sm text-muted-foreground">
+                    {filteredCodes.length} codes
+                  </span>
+                )}
+              </div>
+              <CodeList codes={filteredCodes} isRecentFn={isRecent} />
+            </div>
+          </div>
+        )}
       </main>
 
       <Footer />
