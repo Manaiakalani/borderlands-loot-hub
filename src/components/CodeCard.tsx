@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Clock, AlertCircle, ExternalLink, Key } from 'lucide-react';
+import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles } from 'lucide-react';
 import { ShiftCode, GAME_INFO } from '@/data/shiftCodes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -7,10 +7,13 @@ import { toast } from 'sonner';
 
 interface CodeCardProps {
   code: ShiftCode;
+  isNew?: boolean;
+  isRecent?: boolean;
 }
 
-export function CodeCard({ code }: CodeCardProps) {
+export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
   const [copied, setCopied] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleCopy = async () => {
     try {
@@ -59,12 +62,31 @@ export function CodeCard({ code }: CodeCardProps) {
   return (
     <div
       className={cn(
-        "group relative p-4 rounded-xl border bg-card card-hover",
+        "group relative p-4 rounded-xl border bg-card transition-all duration-300",
+        "hover:translate-y-[-2px] hover:shadow-lg hover:shadow-black/20",
         code.status === 'active' && "border-success/20 hover:border-success/40",
         code.status === 'expired' && "border-destructive/20 opacity-60 hover:opacity-80",
-        code.status === 'unknown' && "border-warning/20 hover:border-warning/40"
+        code.status === 'unknown' && "border-warning/20 hover:border-warning/40",
+        isNew && "ring-2 ring-primary/30 animate-pulse-border"
       )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
+      {/* New Badge */}
+      {isNew && (
+        <div className="absolute -top-2 -right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold shadow-lg">
+          <Sparkles className="w-3 h-3" />
+          NEW
+        </div>
+      )}
+      
+      {/* Recent Badge */}
+      {isRecent && !isNew && (
+        <div className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-xs font-bold shadow-lg">
+          RECENT
+        </div>
+      )}
+
       {/* Top Row: Game & Status */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -97,8 +119,11 @@ export function CodeCard({ code }: CodeCardProps) {
       </div>
 
       {/* Code */}
-      <div className="mb-3">
-        <code className="font-mono-code text-lg sm:text-xl font-bold text-foreground tracking-wide break-all">
+      <div className="mb-3 relative">
+        <code className={cn(
+          "font-mono-code text-lg sm:text-xl font-bold tracking-wide break-all transition-colors duration-200",
+          isHovered && code.status !== 'expired' ? "text-primary" : "text-foreground"
+        )}>
           {code.code}
         </code>
       </div>

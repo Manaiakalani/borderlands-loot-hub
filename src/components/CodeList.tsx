@@ -4,12 +4,13 @@ import { PackageOpen } from 'lucide-react';
 
 interface CodeListProps {
   codes: ShiftCode[];
+  isRecentFn?: (code: ShiftCode) => boolean;
 }
 
-export function CodeList({ codes }: CodeListProps) {
+export function CodeList({ codes, isRecentFn }: CodeListProps) {
   if (codes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
         <div className="p-4 rounded-full bg-muted/50 mb-4">
           <PackageOpen className="w-12 h-12 text-muted-foreground" />
         </div>
@@ -27,9 +28,12 @@ export function CodeList({ codes }: CodeListProps) {
         <div
           key={code.id}
           className="animate-fade-in"
-          style={{ animationDelay: `${index * 50}ms` }}
+          style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
         >
-          <CodeCard code={code} />
+          <CodeCard 
+            code={code} 
+            isRecent={isRecentFn ? isRecentFn(code) : false}
+          />
         </div>
       ))}
     </div>
