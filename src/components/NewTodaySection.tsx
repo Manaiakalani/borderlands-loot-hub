@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ShiftCode } from '@/data/shiftCodes';
 import { CodeCard } from './CodeCard';
 import { Sparkles } from 'lucide-react';
@@ -6,7 +7,7 @@ interface NewTodaySectionProps {
   codes: ShiftCode[];
 }
 
-export function NewTodaySection({ codes }: NewTodaySectionProps) {
+export const NewTodaySection = memo(function NewTodaySection({ codes }: NewTodaySectionProps) {
   if (codes.length === 0) return null;
 
   return (
@@ -23,12 +24,13 @@ export function NewTodaySection({ codes }: NewTodaySectionProps) {
         </span>
       </div>
       
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list" aria-label="New codes added today">
         {codes.map((code, index) => (
           <div
             key={code.id}
             className="animate-fade-in"
             style={{ animationDelay: `${index * 100}ms` }}
+            role="listitem"
           >
             <CodeCard code={code} isNew />
           </div>
@@ -36,4 +38,4 @@ export function NewTodaySection({ codes }: NewTodaySectionProps) {
       </div>
     </section>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ShiftCode } from '@/data/shiftCodes';
 import { CodeCard } from './CodeCard';
 import { PackageOpen } from 'lucide-react';
@@ -7,7 +8,7 @@ interface CodeListProps {
   isRecentFn?: (code: ShiftCode) => boolean;
 }
 
-export function CodeList({ codes, isRecentFn }: CodeListProps) {
+export const CodeList = memo(function CodeList({ codes, isRecentFn }: CodeListProps) {
   if (codes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
@@ -23,12 +24,13 @@ export function CodeList({ codes, isRecentFn }: CodeListProps) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list" aria-label="SHiFT codes">
       {codes.map((code, index) => (
         <div
           key={code.id}
           className="animate-fade-in"
           style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
+          role="listitem"
         >
           <CodeCard 
             code={code} 
@@ -38,4 +40,4 @@ export function CodeList({ codes, isRecentFn }: CodeListProps) {
       ))}
     </div>
   );
-}
+});

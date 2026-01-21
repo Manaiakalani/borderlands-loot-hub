@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Header } from '@/components/Header';
 import { FilterBar } from '@/components/FilterBar';
 import { CodeList } from '@/components/CodeList';
@@ -8,9 +8,17 @@ import { useShiftCodes } from '@/hooks/useShiftCodes';
 import { GameType, CodeStatus } from '@/data/shiftCodes';
 import { Loader2, Clock } from 'lucide-react';
 
+/** Status sorting priority - lower numbers appear first */
+const STATUS_SORT_ORDER: Record<CodeStatus, number> = {
+  active: 0,
+  unknown: 1,
+  expired: 2,
+};
+
 const Index = () => {
   const [selectedGame, setSelectedGame] = useState<GameType | 'ALL'>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<CodeStatus | 'ALL'>('ALL');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const { 
     codes, 
@@ -21,35 +29,38 @@ const Index = () => {
     activeCodes,
     isNewToday,
     isRecent,
+    isStale,
+    nextRefreshIn,
+    dataSource,
   } = useShiftCodes();
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Determine if we show the "New Today" section
+  const showNewTodaySection = selectedGame === 'ALL' && selectedStatus === 'ALL' && newTodayCodes.length > 0;
 
-  // Filter codes based on selection
+  // Filter and sort codes based on selection
   const filteredCodes = useMemo(() => {
     return codes.filter((code) => {
       const gameMatch = selectedGame === 'ALL' || code.game === selectedGame;
       const statusMatch = selectedStatus === 'ALL' || code.status === selectedStatus;
-      // Exclude "new today" codes from main list when showing all
-      const notInNewSection = selectedGame !== 'ALL' || selectedStatus !== 'ALL' || !isNewToday(code);
+      // Exclude "new today" codes from main list when showing the special section
+      const notInNewSection = !showNewTodaySection || !isNewToday(code);
       return gameMatch && statusMatch && notInNewSection;
     }).sort((a, b) => {
-      // Sort by status (active first) then by date
-      const statusOrder = { active: 0, unknown: 1, expired: 2 };
-      const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+      // Sort by status (active first) then by date (newest first)
+      const statusDiff = STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status];
       if (statusDiff !== 0) return statusDiff;
       return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
     });
-  }, [codes, selectedGame, selectedStatus, isNewToday]);
+  }, [codes, selectedGame, selectedStatus, showNewTodaySection, isNewToday]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await refresh();
-    setIsRefreshing(false);
-  };
-
-  // Show "New Today" section only when viewing all codes
-  const showNewTodaySection = selectedGame === 'ALL' && selectedStatus === 'ALL' && newTodayCodes.length > 0;
+    try {
+      await refresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refresh]);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -65,6 +76,10 @@ const Index = () => {
         activeCodes={activeCodes}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
+        lastFetched={lastFetched}
+        isStale={isStale}
+        nextRefreshIn={nextRefreshIn}
+        dataSource={dataSource}
       />
 
       <main className="flex-1 container py-6 space-y-6">

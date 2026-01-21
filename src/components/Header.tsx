@@ -1,16 +1,56 @@
-import { ExternalLink, Key, RefreshCw } from 'lucide-react';
+import { memo } from 'react';
+import { ExternalLink, Key, RefreshCw, AlertTriangle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+
+/** Official SHiFT redemption URL */
+const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';
+
+/** Data source display names */
+const SOURCE_LABELS: Record<string, string> = {
+  local: 'Embedded Data',
+  remote: 'Remote API',
+};
 
 interface HeaderProps {
   totalCodes: number;
   activeCodes: number;
   onRefresh: () => void;
   isRefreshing: boolean;
+  lastFetched?: Date | null;
+  isStale?: boolean;
+  nextRefreshIn?: string | null;
+  dataSource?: 'local' | 'remote';
 }
 
-export function Header({ totalCodes, activeCodes, onRefresh, isRefreshing }: HeaderProps) {
+export const Header = memo(function Header({ 
+  totalCodes, 
+  activeCodes, 
+  onRefresh, 
+  isRefreshing,
+  lastFetched,
+  isStale,
+  nextRefreshIn,
+  dataSource,
+}: HeaderProps) {
+  const formatLastFetched = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    
+    if (diffDays > 0) return `${diffDays}d ago`;
+    if (diffHours > 0) return `${diffHours}h ago`;
+    return 'Just now';
+  };
+
   return (
-    <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+    <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50" role="banner">
       <div className="container py-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           {/* Logo & Title */}
@@ -41,17 +81,60 @@ export function Header({ totalCodes, activeCodes, onRefresh, isRefreshing }: Hea
               </div>
             </div>
 
+            {/* Stale Warning */}
+            {isStale && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="px-2 py-1 rounded-full bg-warning/10 border border-warning/30 text-warning">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Data may be outdated. Click refresh to update.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                className="text-muted-foreground hover:text-primary"
-              >
-                <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={onRefresh}
+                      disabled={isRefreshing}
+                      aria-label="Refresh codes"
+                      className="text-muted-foreground hover:text-primary"
+                    >
+                      <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <div className="space-y-1 text-xs">
+                      {lastFetched && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          Updated: {formatLastFetched(lastFetched)}
+                        </p>
+                      )}
+                      {nextRefreshIn && (
+                        <p className="text-muted-foreground">
+                          Auto-refresh in: {nextRefreshIn}
+                        </p>
+                      )}
+                      {dataSource && (
+                        <p className="text-muted-foreground">
+                          Source: {SOURCE_LABELS[dataSource] || dataSource}
+                        </p>
+                      )}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <Button
                 asChild
                 variant="vault"
@@ -59,12 +142,13 @@ export function Header({ totalCodes, activeCodes, onRefresh, isRefreshing }: Hea
                 className="hidden sm:flex"
               >
                 <a
-                  href="https://shift.gearboxsoftware.com/rewards"
+                  href={SHIFT_REDEEM_URL}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label="Open SHiFT redemption website"
                 >
                   Redeem Codes
-                  <ExternalLink className="w-4 h-4 ml-1.5" />
+                  <ExternalLink className="w-4 h-4 ml-1.5" aria-hidden="true" />
                 </a>
               </Button>
             </div>
@@ -73,4 +157,4 @@ export function Header({ totalCodes, activeCodes, onRefresh, isRefreshing }: Hea
       </div>
     </header>
   );
-}
+});

@@ -1,9 +1,46 @@
-import { useState } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles } from 'lucide-react';
-import { ShiftCode, GAME_INFO } from '@/data/shiftCodes';
+import { ShiftCode, GAME_INFO, CodeStatus, RewardType } from '@/data/shiftCodes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+
+/** Status configuration for styling and icons */
+const STATUS_CONFIG: Record<CodeStatus, {
+  label: string;
+  className: string;
+  icon: typeof Check;
+}> = {
+  active: {
+    label: 'Active',
+    className: 'bg-success/10 text-success border-success/30',
+    icon: Check,
+  },
+  expired: {
+    label: 'Expired',
+    className: 'bg-destructive/10 text-destructive border-destructive/30',
+    icon: Clock,
+  },
+  unknown: {
+    label: 'Unknown',
+    className: 'bg-warning/10 text-warning border-warning/30',
+    icon: AlertCircle,
+  },
+};
+
+/** Reward type labels */
+const REWARD_TYPE_LABELS: Record<RewardType, string> = {
+  'golden-keys': 'Golden Keys',
+  'skeleton-keys': 'Skeleton Keys',
+  'diamond-keys': 'Diamond Keys',
+  'skin': 'Skin',
+  'cosmetic': 'Cosmetic',
+  'weapon': 'Weapon',
+  'other': 'Other',
+};
+
+/** Redeem URL for SHiFT codes */
+const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';
 
 interface CodeCardProps {
   code: ShiftCode;
@@ -11,11 +48,11 @@ interface CodeCardProps {
   isRecent?: boolean;
 }
 
-export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
+export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
   const [copied, setCopied] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(code.code);
       setCopied(true);
@@ -26,38 +63,12 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
     } catch (err) {
       toast.error('Failed to copy code');
     }
-  };
+  }, [code.code]);
 
   const gameInfo = GAME_INFO[code.game];
-  
-  const statusConfig = {
-    active: {
-      label: 'Active',
-      className: 'bg-success/10 text-success border-success/30',
-      icon: Check,
-    },
-    expired: {
-      label: 'Expired',
-      className: 'bg-destructive/10 text-destructive border-destructive/30',
-      icon: Clock,
-    },
-    unknown: {
-      label: 'Unknown',
-      className: 'bg-warning/10 text-warning border-warning/30',
-      icon: AlertCircle,
-    },
-  };
-
-  const rewardTypeConfig = {
-    'golden-keys': { label: 'Keys', icon: Key },
-    'skin': { label: 'Skin', icon: null },
-    'cosmetic': { label: 'Cosmetic', icon: null },
-    'weapon': { label: 'Weapon', icon: null },
-    'other': { label: 'Other', icon: null },
-  };
-
-  const status = statusConfig[code.status];
+  const status = STATUS_CONFIG[code.status];
   const StatusIcon = status.icon;
+  const isExpired = code.status === 'expired';
 
   return (
     <div
@@ -104,7 +115,7 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
           
           {/* Reward Type */}
           <span className="text-xs text-muted-foreground">
-            {rewardTypeConfig[code.rewardType].label}
+            {REWARD_TYPE_LABELS[code.rewardType]}
           </span>
         </div>
 
@@ -155,7 +166,8 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
             variant={copied ? 'success' : 'secondary'}
             size="sm"
             onClick={handleCopy}
-            disabled={code.status === 'expired'}
+            disabled={isExpired}
+            aria-label={copied ? 'Code copied' : `Copy code ${code.code}`}
             className={cn(
               "transition-all duration-200",
               copied && "glow-success"
@@ -163,18 +175,18 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
           >
             {copied ? (
               <>
-                <Check className="w-4 h-4 mr-1" />
+                <Check className="w-4 h-4 mr-1" aria-hidden="true" />
                 Copied
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4 mr-1" />
+                <Copy className="w-4 h-4 mr-1" aria-hidden="true" />
                 Copy
               </>
             )}
           </Button>
           
-          {code.status !== 'expired' && (
+          {!isExpired && (
             <Button
               variant="secondary"
               size="sm"
@@ -182,12 +194,13 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
               className="text-muted-foreground hover:text-primary"
             >
               <a
-                href={`https://shift.gearboxsoftware.com/rewards`}
+                href={SHIFT_REDEEM_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label={`Redeem code for ${code.reward}`}
               >
                 Redeem
-                <ExternalLink className="w-4 h-4 ml-1" />
+                <ExternalLink className="w-4 h-4 ml-1" aria-hidden="true" />
               </a>
             </Button>
           )}
@@ -195,4 +208,4 @@ export function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
       </div>
     </div>
   );
-}
+});

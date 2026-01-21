@@ -1,0 +1,47 @@
+name: Fetch SHiFT Codes from Twitter
+
+on:
+  # Run daily at 8 AM UTC
+  schedule:
+    - cron: '0 8 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  fetch-codes:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch Twitter codes
+        env:
+          TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
+        run: node scripts/fetch-twitter-codes.mjs
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          git diff --quiet src/data/shiftCodes.ts || echo "changes=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push if changed
+        if: steps.git-check.outputs.changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add src/data/shiftCodes.ts
+          git commit -m "🔑 Auto-update SHiFT codes from Twitter [skip ci]"
+          git push
