@@ -13,9 +13,9 @@ export const Footer = memo(function Footer() {
       <div className="container py-6">
         <div className="flex flex-col items-center gap-6">
           {/* Made with love */}
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground group cursor-default">
             <span>Made with</span>
-            <Heart className="w-4 h-4 text-vault-gold fill-vault-gold" aria-label="love" />
+            <Heart className="w-4 h-4 text-vault-gold fill-vault-gold transition-all duration-300 group-hover:drop-shadow-[0_0_8px_rgba(245,184,0,0.8)] group-hover:scale-110" aria-label="love" />
             <span>in Seattle, WA for the Borderlands community</span>
           </div>
           
@@ -25,7 +25,7 @@ export const Footer = memo(function Footer() {
               href={CREATOR_GITHUB_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-vault-gold transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-vault-gold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(245,184,0,0.6)]"
               aria-label="Visit creator's GitHub profile"
             >
               <Github className="w-4 h-4" aria-hidden="true" />
@@ -35,7 +35,7 @@ export const Footer = memo(function Footer() {
               href={CREATOR_TWITTER_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-vault-gold transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-vault-gold transition-all duration-300 hover:drop-shadow-[0_0_8px_rgba(245,184,0,0.6)]"
               aria-label="Follow creator on Twitter"
             >
               <Twitter className="w-4 h-4" aria-hidden="true" />
