@@ -39,7 +39,16 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 | Borderlands 2 | BL2 | Gold |
 | Borderlands: The Pre-Sequel | TPS | Purple |
 | Borderlands 3 | BL3 | Orange |
+| Borderlands 4 | BL4 | Green |
 | Tiny Tina's Wonderlands | TTW | Pink |
+
+## 📡 Data Sources
+
+Codes are aggregated from multiple trusted sources:
+
+- **[MentalMars.com](https://mentalmars.com)** - Comprehensive SHiFT code database
+- **[Game8.co](https://game8.co/games/Borderlands-4/archives/548406)** - Borderlands 4 codes with expiration info
+- **Twitter** - @Borderlands, @ShiftCodesTK, @DuvalMagic (via GitHub Actions)
 
 ## 🚀 Getting Started
 

@@ -63,5 +63,6 @@ export const STORAGE_KEYS = {
  * Current data version - increment when making breaking changes to data structure
  * v2: Initial version with weekly cache
  * v3: Added expiresAt and lastVerifiedAt fields
+ * v4: Added Borderlands 4 support and game8.co codes
  */
-export const DATA_VERSION = 3;
+export const DATA_VERSION = 4;
