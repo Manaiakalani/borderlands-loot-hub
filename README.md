@@ -48,6 +48,7 @@ Codes are aggregated from multiple trusted sources:
 
 - **[MentalMars.com](https://mentalmars.com)** - Comprehensive SHiFT code database
 - **[Game8.co](https://game8.co/games/Borderlands-4/archives/548406)** - Borderlands 4 codes with expiration info
+- **[r/Borderlandsshiftcodes](https://reddit.com/r/Borderlandsshiftcodes)** - Community-sourced codes from Reddit
 - **Twitter** - @Borderlands, @ShiftCodesTK, @DuvalMagic (via GitHub Actions)
 
 ## 🚀 Getting Started

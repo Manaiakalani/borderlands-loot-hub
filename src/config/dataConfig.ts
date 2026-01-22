@@ -64,5 +64,6 @@ export const STORAGE_KEYS = {
  * v2: Initial version with weekly cache
  * v3: Added expiresAt and lastVerifiedAt fields
  * v4: Added Borderlands 4 support and game8.co codes
+ * v5: Added r/Borderlandsshiftcodes Reddit codes
  */
-export const DATA_VERSION = 4;
+export const DATA_VERSION = 5;
