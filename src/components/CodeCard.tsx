@@ -110,15 +110,20 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
   const StatusIcon = status.icon;
   const isExpired = code.status === 'expired';
 
+  // Game-specific CSS class for color accents
+  const gameColorClass = `game-${code.game.toLowerCase()}`;
+
   return (
     <div
       className={cn(
         "group relative p-4 rounded-xl border bg-card transition-all duration-300",
         "hover:translate-y-[-2px] hover:shadow-lg hover:shadow-black/20",
+        "card-borderlands game-accent game-glow",
+        gameColorClass,
         code.status === 'active' && "border-success/20 hover:border-success/40",
         code.status === 'expired' && "border-destructive/20 opacity-60 hover:opacity-80",
         code.status === 'unknown' && "border-warning/20 hover:border-warning/40",
-        isNew && "ring-2 ring-primary/30 animate-pulse-border"
+        isNew && "ring-2 ring-primary/30 animate-pulse-border neon-border"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -161,26 +166,34 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
 
         {/* Status Badge */}
         <div className={cn(
-          "flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded border",
-          status.className
+          "flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded border transition-all duration-200",
+          status.className,
+          isHovered && "scale-105"
         )}>
           <StatusIcon className="w-3 h-3" />
           {status.label}
         </div>
       </div>
 
-      {/* Code */}
-      <div className="mb-3 relative">
+      {/* Code - with glitch effect on hover */}
+      <div className="mb-3 relative overflow-hidden">
         <code className={cn(
-          "font-mono-code text-lg sm:text-xl font-bold tracking-wide break-all transition-colors duration-200",
+          "font-mono-code text-lg sm:text-xl font-bold tracking-wide break-all transition-all duration-200",
+          "glitch-text select-all cursor-pointer",
           isHovered && code.status !== 'expired' ? "text-primary" : "text-foreground"
         )}>
           {code.code}
         </code>
+        {/* Animated underline on hover */}
+        <div className={cn(
+          "absolute bottom-0 left-0 h-0.5 bg-primary transition-all duration-300 ease-out",
+          isHovered ? "w-full" : "w-0"
+        )} />
       </div>
 
       {/* Reward */}
-      <p className="text-sm text-muted-foreground mb-4">
+      <p className="text-sm text-muted-foreground mb-4 flex items-center gap-2">
+        <Key className="w-4 h-4 text-primary/60" />
         {code.reward}
       </p>
 

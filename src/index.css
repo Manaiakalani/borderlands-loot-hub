@@ -170,4 +170,208 @@
     transform: translateY(-2px);
     box-shadow: 0 8px 30px hsl(0 0% 0% / 0.3), 0 0 20px hsl(45 95% 55% / 0.15);
   }
+
+  /* Borderlands cel-shaded card style */
+  .card-borderlands {
+    position: relative;
+    background: linear-gradient(135deg, hsl(220 12% 14%) 0%, hsl(220 12% 10%) 100%);
+    border: 2px solid hsl(220 10% 25%);
+    box-shadow: 
+      inset 0 1px 0 hsl(220 10% 30% / 0.5),
+      0 4px 6px -1px hsl(0 0% 0% / 0.3),
+      0 2px 4px -2px hsl(0 0% 0% / 0.2);
+  }
+
+  .card-borderlands::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 2px;
+    background: linear-gradient(135deg, hsl(45 95% 55% / 0.1), transparent 50%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Hexagon pattern background */
+  .hex-pattern {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%23f5b800' fill-opacity='0.03'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+
+  /* Animated scan line effect */
+  .scanlines {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 0% / 0.03) 2px,
+      hsl(0 0% 0% / 0.03) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* Vault symbol glow */
+  .vault-glow {
+    filter: drop-shadow(0 0 10px hsl(45 95% 55% / 0.5));
+    transition: filter 0.3s ease;
+  }
+
+  .vault-glow:hover {
+    filter: drop-shadow(0 0 20px hsl(45 95% 55% / 0.8));
+  }
+
+  /* Skeleton loading animation */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(220 10% 15%) 25%,
+      hsl(220 10% 20%) 50%,
+      hsl(220 10% 15%) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Floating particles keyframes */
+  @keyframes float-particle {
+    0%, 100% {
+      transform: translateY(0) translateX(0);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-100vh) translateX(50px);
+      opacity: 0;
+    }
+  }
+
+  /* Code reveal animation */
+  @keyframes code-reveal {
+    0% {
+      clip-path: inset(0 100% 0 0);
+    }
+    100% {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+
+  .code-reveal {
+    animation: code-reveal 0.5s ease-out forwards;
+  }
+
+  /* Glitch text effect for special codes */
+  @keyframes glitch {
+    0%, 100% {
+      text-shadow: 
+        2px 0 hsl(0 100% 50%),
+        -2px 0 hsl(180 100% 50%);
+    }
+    25% {
+      text-shadow: 
+        -2px 0 hsl(0 100% 50%),
+        2px 0 hsl(180 100% 50%);
+    }
+    50% {
+      text-shadow: 
+        2px 2px hsl(0 100% 50%),
+        -2px -2px hsl(180 100% 50%);
+    }
+    75% {
+      text-shadow: 
+        -2px 2px hsl(0 100% 50%),
+        2px -2px hsl(180 100% 50%);
+    }
+  }
+
+  .glitch-text:hover {
+    animation: glitch 0.3s ease-in-out;
+  }
+
+  /* Neon border effect */
+  .neon-border {
+    box-shadow: 
+      0 0 5px hsl(45 95% 55% / 0.5),
+      0 0 10px hsl(45 95% 55% / 0.3),
+      0 0 20px hsl(45 95% 55% / 0.2),
+      inset 0 0 5px hsl(45 95% 55% / 0.1);
+  }
+
+  /* Typing cursor for code display */
+  .typing-cursor::after {
+    content: '|';
+    animation: blink 1s step-end infinite;
+    color: hsl(45 95% 55%);
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* Game-specific color accents */
+  .game-bl1 { --game-color: hsl(200 70% 50%); }
+  .game-bl2 { --game-color: hsl(45 95% 55%); }
+  .game-tps { --game-color: hsl(280 70% 60%); }
+  .game-bl3 { --game-color: hsl(25 95% 55%); }
+  .game-bl4 { --game-color: hsl(150 70% 45%); }
+  .game-wonderlands { --game-color: hsl(320 70% 60%); }
+
+  .game-accent {
+    border-left: 3px solid var(--game-color);
+  }
+
+  .game-glow:hover {
+    box-shadow: 0 0 20px var(--game-color, hsl(45 95% 55%) / 0.3);
+  }
+
+  /* Stat counter animation */
+  @keyframes count-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .stat-animate {
+    animation: count-up 0.5s ease-out forwards;
+  }
+
+  /* Vault door opening animation for new codes section */
+  @keyframes vault-open {
+    0% {
+      clip-path: polygon(50% 0%, 50% 0%, 50% 100%, 50% 100%);
+    }
+    100% {
+      clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%);
+    }
+  }
+
+  .vault-open {
+    animation: vault-open 0.6s ease-out forwards;
+  }
 }
+

@@ -4,9 +4,11 @@ import { FilterBar } from '@/components/FilterBar';
 import { CodeList } from '@/components/CodeList';
 import { NewTodaySection } from '@/components/NewTodaySection';
 import { Footer } from '@/components/Footer';
+import { ParticleBackground } from '@/components/ParticleBackground';
+import { SkeletonGrid } from '@/components/SkeletonCard';
 import { useShiftCodes } from '@/hooks/useShiftCodes';
 import { GameType, CodeStatus } from '@/data/shiftCodes';
-import { Loader2, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 
 /** Status sorting priority - lower numbers appear first */
 const STATUS_SORT_ORDER: Record<CodeStatus, number> = {
@@ -64,11 +66,16 @@ const Index = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Background Pattern */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
+      {/* Floating Particles */}
+      <ParticleBackground />
+      
+      {/* Background Pattern with Hexagon texture */}
+      <div className="fixed inset-0 -z-10 overflow-hidden hex-pattern">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent" />
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+        {/* Subtle scan lines overlay */}
+        <div className="absolute inset-0 scanlines opacity-50" />
       </div>
 
       <Header
@@ -109,9 +116,12 @@ const Index = () => {
         />
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 animate-fade-in">
-            <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
-            <p className="text-muted-foreground">Loading SHiFT codes...</p>
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+              <p className="text-muted-foreground">Loading SHiFT codes...</p>
+            </div>
+            <SkeletonGrid count={6} />
           </div>
         ) : (
           <div className="space-y-8">

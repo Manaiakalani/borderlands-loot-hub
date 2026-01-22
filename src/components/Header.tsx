@@ -51,13 +51,13 @@ export const Header = memo(function Header({
   };
 
   return (
-    <header className="border-b border-border/50 bg-card/50 backdrop-blur-sm sticky top-0 z-50" role="banner">
+    <header className="border-b border-border/50 bg-card/80 backdrop-blur-md sticky top-0 z-50 scanlines" role="banner">
       <div className="container py-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           {/* Logo & Title */}
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 border border-primary/30 glow-vault">
-              <Key className="w-6 h-6 text-primary" />
+          <div className="flex items-center gap-3 group">
+            <div className="p-2 rounded-lg bg-primary/10 border border-primary/30 glow-vault vault-glow transition-all duration-300 group-hover:scale-110">
+              <Key className="w-6 h-6 text-primary transition-transform duration-300 group-hover:rotate-12" />
             </div>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
@@ -72,13 +72,13 @@ export const Header = memo(function Header({
 
           {/* Stats & Actions */}
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Stats Pills */}
+            {/* Stats Pills - with animation */}
             <div className="flex items-center gap-2">
-              <div className="px-3 py-1.5 rounded-full bg-success/10 border border-success/30 text-success text-sm font-semibold">
-                {activeCodes} Active
+              <div className="px-3 py-1.5 rounded-full bg-success/10 border border-success/30 text-success text-sm font-semibold stat-animate transition-transform hover:scale-105">
+                <span className="inline-block">{activeCodes}</span> Active
               </div>
-              <div className="px-3 py-1.5 rounded-full bg-secondary border border-border text-muted-foreground text-sm font-semibold">
-                {totalCodes} Total
+              <div className="px-3 py-1.5 rounded-full bg-secondary border border-border text-muted-foreground text-sm font-semibold stat-animate transition-transform hover:scale-105" style={{ animationDelay: '0.1s' }}>
+                <span className="inline-block">{totalCodes}</span> Total
               </div>
             </div>
 
@@ -87,7 +87,7 @@ export const Header = memo(function Header({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="px-2 py-1 rounded-full bg-warning/10 border border-warning/30 text-warning">
+                    <div className="px-2 py-1 rounded-full bg-warning/10 border border-warning/30 text-warning animate-pulse">
                       <AlertTriangle className="w-4 h-4" />
                     </div>
                   </TooltipTrigger>

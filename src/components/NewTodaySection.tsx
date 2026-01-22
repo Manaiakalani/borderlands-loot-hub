@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { ShiftCode } from '@/data/shiftCodes';
 import { CodeCard } from './CodeCard';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Zap } from 'lucide-react';
 
 interface NewTodaySectionProps {
   codes: ShiftCode[];
@@ -11,15 +11,18 @@ export const NewTodaySection = memo(function NewTodaySection({ codes }: NewToday
   if (codes.length === 0) return null;
 
   return (
-    <section className="animate-slide-up">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/30 animate-pulse-border">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-sm font-bold text-primary uppercase tracking-wider">
+    <section className="vault-open">
+      {/* Section Header with glow effect */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/30 neon-border animate-pulse-border">
+          <Sparkles className="w-5 h-5 text-primary vault-glow" />
+          <span className="text-base font-bold text-primary uppercase tracking-wider">
             New Today
           </span>
+          <Zap className="w-4 h-4 text-primary animate-pulse" />
         </div>
-        <span className="text-sm text-muted-foreground">
+        <div className="flex-1 h-px bg-gradient-to-r from-primary/50 to-transparent" />
+        <span className="text-sm text-muted-foreground px-2 py-1 bg-card rounded">
           {codes.length} fresh {codes.length === 1 ? 'code' : 'codes'}
         </span>
       </div>
