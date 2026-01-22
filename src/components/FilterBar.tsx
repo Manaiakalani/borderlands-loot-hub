@@ -11,7 +11,7 @@ interface FilterBarProps {
 }
 
 /** Available games for filtering */
-const GAMES: readonly (GameType | 'ALL')[] = ['ALL', 'BL1', 'BL2', 'TPS', 'BL3', 'WONDERLANDS'] as const;
+const GAMES: readonly (GameType | 'ALL')[] = ['ALL', 'BL1', 'BL2', 'TPS', 'BL3', 'BL4', 'WONDERLANDS'] as const;
 
 /** Available statuses for filtering */
 const STATUSES: readonly (CodeStatus | 'ALL')[] = ['ALL', 'active', 'expired', 'unknown'] as const;

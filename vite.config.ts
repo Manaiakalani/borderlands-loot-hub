@@ -21,4 +21,23 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Optimize chunk splitting for better caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks for better caching
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['@radix-ui/react-tooltip', '@radix-ui/react-select', '@radix-ui/react-tabs'],
+          'query-vendor': ['@tanstack/react-query'],
+        },
+      },
+    },
+    // Enable source maps for production debugging (optional)
+    sourcemap: false,
+    // Minification options
+    minify: 'esbuild',
+    // Target modern browsers for smaller bundle
+    target: 'es2020',
+  },
 }));
