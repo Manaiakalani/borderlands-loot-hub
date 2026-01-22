@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { ExternalLink, Twitter, Github, Heart } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ExternalLink, Twitter, Github, Heart, Shield } from 'lucide-react';
 
 /** External links */
 const SHIFT_OFFICIAL_URL = 'https://shift.gearboxsoftware.com/rewards';
@@ -58,6 +59,13 @@ export const Footer = memo(function Footer() {
             </div>
             
             <div className="flex items-center gap-4">
+              <Link
+                to="/privacy"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Shield className="w-4 h-4" aria-hidden="true" />
+                Privacy
+              </Link>
               <a
                 href={SHIFT_OFFICIAL_URL}
                 target="_blank"
