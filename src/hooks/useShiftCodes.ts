@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { mockShiftCodes, ShiftCode } from '@/data/shiftCodes';
+import { mockShiftCodes, ShiftCode, isCodeExpired, getEffectiveStatus } from '@/data/shiftCodes';
 import { DATA_CONFIG, STORAGE_KEYS, DATA_VERSION } from '@/config/dataConfig';
 
 const RECENT_DAYS_THRESHOLD = 3;
@@ -285,17 +285,26 @@ export function useShiftCodes() {
   }, []);
 
   const newTodayCodes = useMemo(() => 
-    codes.filter(c => isNewToday(c) && c.status === 'active'),
+    codes.filter(c => isNewToday(c) && getEffectiveStatus(c) === 'active'),
     [codes, isNewToday]
   );
 
   const recentCodes = useMemo(() =>
-    codes.filter(c => isRecent(c) && c.status === 'active' && !isNewToday(c)),
+    codes.filter(c => isRecent(c) && getEffectiveStatus(c) === 'active' && !isNewToday(c)),
     [codes, isRecent, isNewToday]
   );
 
   const activeCodes = useMemo(() => 
-    codes.filter(c => c.status === 'active').length,
+    codes.filter(c => getEffectiveStatus(c) === 'active').length,
+    [codes]
+  );
+
+  // Process codes to apply auto-expiration logic
+  const processedCodes = useMemo(() => 
+    codes.map(code => ({
+      ...code,
+      status: getEffectiveStatus(code),
+    })),
     [codes]
   );
 
@@ -305,7 +314,7 @@ export function useShiftCodes() {
   );
 
   return {
-    codes,
+    codes: processedCodes,
     isLoading,
     lastFetched,
     refresh,

@@ -1,5 +1,5 @@
 import { useState, memo, useCallback } from 'react';
-import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles } from 'lucide-react';
+import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles, Calendar, CheckCircle } from 'lucide-react';
 import { ShiftCode, GAME_INFO, CodeStatus, RewardType } from '@/data/shiftCodes';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,46 @@ const REWARD_TYPE_LABELS: Record<RewardType, string> = {
 
 /** Redeem URL for SHiFT codes */
 const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';
+
+/**
+ * Formats a date string for display
+ */
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+/**
+ * Gets a relative time description (e.g., "2 days ago", "in 3 days")
+ */
+const getRelativeTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'tomorrow';
+  if (diffDays === -1) return 'yesterday';
+  if (diffDays > 0) return `in ${diffDays} days`;
+  return `${Math.abs(diffDays)} days ago`;
+};
+
+/**
+ * Checks if expiration is soon (within 7 days)
+ */
+const isExpiringSoon = (expiresAt: string | null | undefined): boolean => {
+  if (!expiresAt) return false;
+  const date = new Date(expiresAt);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays > 0 && diffDays <= 7;
+};
 
 interface CodeCardProps {
   code: ShiftCode;
@@ -146,17 +186,45 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
 
       {/* Bottom Row: Source & Actions */}
       <div className="flex items-center justify-between pt-3 border-t border-border/50">
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-1">
           <span className="text-xs text-muted-foreground">
             Source: {code.source}
           </span>
+          
+          {/* Last Verified Date */}
+          {code.lastVerifiedAt && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <CheckCircle className="w-3 h-3 text-success" />
+              Verified: {formatDate(code.lastVerifiedAt)} ({getRelativeTime(code.lastVerifiedAt)})
+            </span>
+          )}
+          
+          {/* Expiration Date */}
           {code.expiresAt && (
             <span className={cn(
-              "text-xs",
-              code.status === 'expired' ? 'text-destructive' : 'text-muted-foreground'
+              "text-xs flex items-center gap-1",
+              code.status === 'expired' 
+                ? 'text-destructive' 
+                : isExpiringSoon(code.expiresAt)
+                  ? 'text-warning'
+                  : 'text-muted-foreground'
             )}>
-              {code.status === 'expired' ? 'Expired: ' : 'Expires: '}
-              {new Date(code.expiresAt).toLocaleDateString()}
+              <Calendar className="w-3 h-3" />
+              {code.status === 'expired' ? (
+                <>Expired: {formatDate(code.expiresAt)}</>
+              ) : isExpiringSoon(code.expiresAt) ? (
+                <>⚠️ Expires {getRelativeTime(code.expiresAt)}!</>
+              ) : (
+                <>Expires: {formatDate(code.expiresAt)} ({getRelativeTime(code.expiresAt)})</>
+              )}
+            </span>
+          )}
+          
+          {/* Never expires indicator for active codes without expiry */}
+          {!code.expiresAt && code.status === 'active' && (
+            <span className="text-xs text-success/70 flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              No expiration (permanent)
             </span>
           )}
         </div>

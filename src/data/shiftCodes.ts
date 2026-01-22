@@ -10,12 +10,32 @@ export interface ShiftCode {
   reward: string;
   rewardType: RewardType;
   keys?: number;
-  expiresAt?: string;
+  /** ISO date string when the code expires (null = never expires or unknown) */
+  expiresAt?: string | null;
+  /** ISO date string when the code was last verified as active */
+  lastVerifiedAt?: string;
   source: string;
   addedAt: string;
   /** Whether this code works across all platforms (universal) */
   isUniversal?: boolean;
 }
+
+/**
+ * Checks if a code is expired based on its expiresAt date
+ */
+export const isCodeExpired = (code: ShiftCode): boolean => {
+  if (code.status === 'expired') return true;
+  if (!code.expiresAt) return false;
+  return new Date(code.expiresAt) < new Date();
+};
+
+/**
+ * Gets the effective status of a code, accounting for expiration
+ */
+export const getEffectiveStatus = (code: ShiftCode): CodeStatus => {
+  if (isCodeExpired(code)) return 'expired';
+  return code.status;
+};
 
 export const GAME_INFO: Record<GameType, { name: string; shortName: string; color: string }> = {
   BL1: { name: 'Borderlands GOTY', shortName: 'BL1', color: 'hsl(200 70% 50%)' },
@@ -33,6 +53,38 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  * These universal codes are duplicated per game for filtering purposes.
  */
 export const mockShiftCodes: ShiftCode[] = [
+  // ============================================
+  // FEATURED - Time-Limited Codes (expiring soon!)
+  // ============================================
+  {
+    id: 'limited-bl3-january2026',
+    code: 'C35TB-WS9TT-5XXBJ-5T3JJ-6B6HR',
+    game: 'BL3',
+    status: 'active',
+    reward: '3 Golden Keys - January 2026 Special',
+    rewardType: 'golden-keys',
+    keys: 3,
+    source: 'Gearbox Newsletter',
+    addedAt: '2026-01-15',
+    lastVerifiedAt: '2026-01-21',
+    expiresAt: '2026-01-28', // Expires in ~7 days
+    isUniversal: true,
+  },
+  {
+    id: 'limited-wonderlands-jan2026',
+    code: 'JJH3T-BXCKJ-B9H99-3J333-RJWXH',
+    game: 'WONDERLANDS',
+    status: 'active',
+    reward: '2 Skeleton Keys - Weekly Drop',
+    rewardType: 'skeleton-keys',
+    keys: 2,
+    source: 'Twitter @Borderlands',
+    addedAt: '2026-01-20',
+    lastVerifiedAt: '2026-01-21',
+    expiresAt: '2026-01-24', // Expires in ~3 days
+    isUniversal: false,
+  },
+  
   // ============================================
   // TWITTER - Auto-fetched Codes (2026-01-21)
   // ============================================
@@ -116,6 +168,8 @@ export const mockShiftCodes: ShiftCode[] = [
     keys: 50,
     source: 'mentalmars.com',
     addedAt: '2024-12-15',
+    lastVerifiedAt: '2026-01-21',
+    expiresAt: null, // Never expires
     isUniversal: true,
   },
   {
@@ -128,6 +182,8 @@ export const mockShiftCodes: ShiftCode[] = [
     keys: 10,
     source: 'mentalmars.com',
     addedAt: '2024-11-20',
+    lastVerifiedAt: '2026-01-20',
+    expiresAt: null,
     isUniversal: true,
   },
   {
@@ -140,6 +196,8 @@ export const mockShiftCodes: ShiftCode[] = [
     keys: 10,
     source: 'mentalmars.com',
     addedAt: '2024-11-15',
+    lastVerifiedAt: '2026-01-20',
+    expiresAt: null,
     isUniversal: true,
   },
   {
@@ -152,6 +210,8 @@ export const mockShiftCodes: ShiftCode[] = [
     keys: 10,
     source: 'mentalmars.com',
     addedAt: '2024-10-25',
+    lastVerifiedAt: '2026-01-19',
+    expiresAt: null,
     isUniversal: true,
   },
   {
@@ -163,6 +223,8 @@ export const mockShiftCodes: ShiftCode[] = [
     rewardType: 'golden-keys',
     source: 'SDCC 2024',
     addedAt: '2024-07-25',
+    lastVerifiedAt: '2024-07-28',
+    expiresAt: '2024-08-15', // Already expired
     isUniversal: true,
   },
   {
@@ -175,6 +237,8 @@ export const mockShiftCodes: ShiftCode[] = [
     keys: 3,
     source: 'Collector Edition',
     addedAt: '2019-09-13',
+    lastVerifiedAt: '2026-01-15',
+    expiresAt: null, // Permanent
     isUniversal: false,
   },
   {
@@ -187,6 +251,8 @@ export const mockShiftCodes: ShiftCode[] = [
     keys: 1,
     source: 'Collector Edition',
     addedAt: '2019-09-13',
+    lastVerifiedAt: '2026-01-15',
+    expiresAt: null, // Permanent
     isUniversal: false,
   },
   {
