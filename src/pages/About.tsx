@@ -223,10 +223,32 @@ const About = memo(() => {
 
       {/* Footer */}
       <footer className="border-t border-vault-gold/20 mt-16 py-8">
-        <div className="container mx-auto px-4 text-center">
+        <div className="container mx-auto px-4 text-center space-y-4">
           <p className="text-slate-400 flex items-center justify-center gap-2">
-            Made with <Heart className="w-4 h-4 text-red-500 fill-red-500" /> for Vault Hunters
+            Made with <Heart className="w-4 h-4 text-vault-gold fill-vault-gold" /> in Seattle, WA for the Borderlands community
           </p>
+          <div className="flex items-center justify-center gap-6">
+            <a
+              href="https://github.com/Manaiakalani"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-slate-400 hover:text-vault-gold transition-colors"
+              aria-label="Visit creator's GitHub profile"
+            >
+              <Github className="w-4 h-4" />
+              @Manaiakalani
+            </a>
+            <a
+              href="https://twitter.com/manaiakalani"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-slate-400 hover:text-vault-gold transition-colors"
+              aria-label="Follow creator on Twitter"
+            >
+              <Twitter className="w-4 h-4" />
+              @manaiakalani
+            </a>
+          </div>
         </div>
       </footer>
     </div>
