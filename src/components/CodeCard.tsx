@@ -1,6 +1,7 @@
-import { useState, memo, useCallback, useMemo } from 'react';
+import { useState, memo, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles, Calendar, CheckCircle } from 'lucide-react';
 import { ShiftCode, GAME_INFO, CodeStatus, RewardType } from '@/data/shiftCodes';
+import { SHIFT_REDEEM_URL } from '@/config/dataConfig';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -38,9 +39,6 @@ const REWARD_TYPE_LABELS: Record<RewardType, string> = {
   'weapon': 'Weapon',
   'other': 'Other',
 };
-
-/** Redeem URL for SHiFT codes */
-const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';
 
 /**
  * Formats a date string for display
@@ -90,6 +88,14 @@ interface CodeCardProps {
 
 export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -98,7 +104,8 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
       toast.success('Code copied to clipboard!', {
         description: 'Ready to redeem at shift.gearboxsoftware.com',
       });
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       toast.error('Failed to copy code');
     }

@@ -37,7 +37,6 @@ const getCachedData = (): CacheData | null => {
     
     // Invalidate cache if data version changed
     if (cacheData.version !== DATA_VERSION) {
-      console.log('Cache invalidated: data version changed');
       localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
       return null;
     }
@@ -46,13 +45,11 @@ const getCachedData = (): CacheData | null => {
     const isExpired = age > DATA_CONFIG.CACHE_DURATION_MS;
     
     if (isExpired) {
-      console.log(`Cache expired (age: ${Math.round(age / (1000 * 60 * 60))}h)`);
       return null;
     }
     
     return cacheData;
   } catch (e) {
-    console.error('Failed to parse cache:', e);
     localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
     return null;
   }
@@ -104,13 +101,10 @@ const fetchRemoteCodes = async (): Promise<ShiftCode[] | null> => {
       throw new Error('Invalid data format: expected non-empty array of codes');
     }
 
-    console.log(`Fetched ${codes.length} codes from remote source`);
     return codes;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      console.warn('Remote fetch timed out');
-    } else {
-      console.warn('Failed to fetch remote codes:', error);
+      // Remote fetch timed out
     }
     return null;
   } finally {
@@ -195,7 +189,6 @@ export function useShiftCodes() {
       setDataSource(source);
       setIsStale(false);
     } catch (error) {
-      console.error('Failed to load codes:', error);
       // Load embedded data as last resort
       setCodes(prev => prev.length === 0 ? mockShiftCodes : prev);
       setDataSource('local');
@@ -225,7 +218,6 @@ export function useShiftCodes() {
     
     // Refresh if cache is expired
     if (age > DATA_CONFIG.CACHE_DURATION_MS) {
-      console.log('Background refresh triggered: cache expired');
       await loadData(true);
     }
     
@@ -270,17 +262,20 @@ export function useShiftCodes() {
     await loadData(true);
   }, [loadData]);
 
+  // Memoize "today" to avoid creating new Date on every filter call
+  const today = useMemo(() => new Date(), []);
+
   // Memoized check if code was added today
   const isNewToday = useCallback((code: ShiftCode): boolean => {
-    return isSameDay(new Date(code.addedAt), new Date());
-  }, []);
+    return isSameDay(new Date(code.addedAt), today);
+  }, [today]);
 
   // Memoized check if code was added recently (within N days)
   const isRecent = useCallback((code: ShiftCode): boolean => {
-    const threshold = new Date();
+    const threshold = new Date(today);
     threshold.setDate(threshold.getDate() - RECENT_DAYS_THRESHOLD);
     return new Date(code.addedAt) >= threshold;
-  }, []);
+  }, [today]);
 
   const newTodayCodes = useMemo(() => 
     codes.filter(c => isNewToday(c) && getEffectiveStatus(c) === 'active'),
