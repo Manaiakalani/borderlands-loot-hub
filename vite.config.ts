@@ -38,6 +38,8 @@ export default defineConfig(({ mode }) => ({
     // Minification options
     minify: 'esbuild',
     // Target modern browsers for smaller bundle
-    target: 'es2020',
+    target: 'esnext',
+    // Skip CSS code splitting - inline for faster first paint
+    cssCodeSplit: true,
   },
 }));

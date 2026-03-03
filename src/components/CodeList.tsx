@@ -29,7 +29,7 @@ export const CodeList = memo(function CodeList({ codes, isRecentFn }: CodeListPr
         <div
           key={code.id}
           className="animate-fade-in"
-          style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
+          style={{ animationDelay: `${Math.min(index, 12) * 50}ms`, animationFillMode: 'backwards' }}
           role="listitem"
         >
           <CodeCard 
