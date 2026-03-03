@@ -1,4 +1,4 @@
-import { useState, memo, useCallback } from 'react';
+import { useState, memo, useCallback, useMemo } from 'react';
 import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles, Calendar, CheckCircle } from 'lucide-react';
 import { ShiftCode, GAME_INFO, CodeStatus, RewardType } from '@/data/shiftCodes';
 import { Button } from '@/components/ui/button';
@@ -90,7 +90,6 @@ interface CodeCardProps {
 
 export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCardProps) {
   const [copied, setCopied] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -110,6 +109,13 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
   const StatusIcon = status.icon;
   const isExpired = code.status === 'expired';
 
+  // Memoize game badge style to avoid new object on every render
+  const gameBadgeStyle = useMemo(() => ({
+    backgroundColor: `${gameInfo.color}20`,
+    color: gameInfo.color,
+    border: `1px solid ${gameInfo.color}40`,
+  }), [gameInfo.color]);
+
   // Game-specific CSS class for color accents
   const gameColorClass = `game-${code.game.toLowerCase()}`;
 
@@ -125,8 +131,6 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
         code.status === 'unknown' && "border-warning/20 hover:border-warning/40",
         isNew && "ring-2 ring-primary/30 animate-pulse-border neon-border"
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* New Badge */}
       {isNew && (
@@ -149,11 +153,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
           {/* Game Badge */}
           <span
             className="px-2 py-0.5 text-xs font-bold rounded uppercase tracking-wider"
-            style={{
-              backgroundColor: `${gameInfo.color}20`,
-              color: gameInfo.color,
-              border: `1px solid ${gameInfo.color}40`,
-            }}
+            style={gameBadgeStyle}
           >
             {gameInfo.shortName}
           </span>
@@ -168,7 +168,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
         <div className={cn(
           "flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded border transition-all duration-200",
           status.className,
-          isHovered && "scale-105"
+          "group-hover:scale-105"
         )}>
           <StatusIcon className="w-3 h-3" />
           {status.label}
@@ -180,14 +180,15 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
         <code className={cn(
           "font-mono-code text-lg sm:text-xl font-bold tracking-wide break-all transition-all duration-200",
           "glitch-text select-all cursor-pointer",
-          isHovered && code.status !== 'expired' ? "text-primary" : "text-foreground"
+          code.status !== 'expired' ? "group-hover:text-primary" : "",
+          "text-foreground"
         )}>
           {code.code}
         </code>
         {/* Animated underline on hover */}
         <div className={cn(
           "absolute bottom-0 left-0 h-0.5 bg-primary transition-all duration-300 ease-out",
-          isHovered ? "w-full" : "w-0"
+          "w-0 group-hover:w-full"
         )} />
       </div>
 

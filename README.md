@@ -134,13 +134,22 @@ scripts/
 ## 🎨 Tech Stack
 
 - **Framework:** [React 18](https://react.dev/) with TypeScript
-- **Build Tool:** [Vite 7](https://vitejs.dev/)
+- **Build Tool:** [Vite 7](https://vitejs.dev/) with esbuild minification
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) with custom Borderlands theme
 - **UI Components:** [shadcn/ui](https://ui.shadcn.com/) (Radix primitives)
 - **Icons:** [Lucide React](https://lucide.dev/)
 - **State Management:** React Query + React hooks
-- **Routing:** React Router DOM
+- **Routing:** React Router DOM (with lazy-loaded routes)
 - **Testing:** Vitest + Testing Library
+
+## ⚡ Performance
+
+- **Code splitting** — Routes lazy-loaded with `React.lazy()` + `Suspense`
+- **Vendor chunking** — React, Radix UI, and React Query split into cacheable chunks
+- **Memoized components** — `CodeCard`, `CodeList`, `FilterBar`, `NewTodaySection` wrapped in `React.memo`
+- **CSS-driven hover effects** — Uses `group-hover` instead of React state for zero re-renders
+- **Capped animation stagger** — Animation delays capped to prevent long delays on large lists
+- **Modern build target** — `esnext` for smaller, more efficient bundles
 
 ## 🔧 Configuration
 

@@ -32,7 +32,7 @@ export const NewTodaySection = memo(function NewTodaySection({ codes }: NewToday
           <div
             key={code.id}
             className="animate-fade-in"
-            style={{ animationDelay: `${index * 100}ms` }}
+            style={{ animationDelay: `${Math.min(index, 6) * 100}ms` }}
             role="listitem"
           >
             <CodeCard code={code} isNew />
