@@ -42,10 +42,6 @@ const REWARD_TYPE_LABELS: Record<RewardType, string> = {
 /** Redeem URL for SHiFT codes */
 const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';
 
-/** Build redeem URL with the code pre-filled */
-const getRedeemUrl = (code: string): string =>
-  `${SHIFT_REDEEM_URL}?code=${encodeURIComponent(code)}`;
-
 /**
  * Formats a date string for display
  */
@@ -109,21 +105,19 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
   }, [code.code]);
 
   const handleRedeem = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    // Auto-copy code to clipboard when redeeming
     navigator.clipboard.writeText(code.code).catch(() => {});
-    toast.success('Code copied & opening SHiFT!', {
-      description: `${code.code} is ready to redeem`,
+    toast.success('Code copied! Paste it on the SHiFT site', {
+      description: `${code.code} — use Ctrl+V to paste`,
     });
   }, [code.code]);
 
   const handleRedeemMiddleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     if (e.button === 1) {
-      // Middle mouse button — auto-copy code and open in new tab
       navigator.clipboard.writeText(code.code).catch(() => {});
-      toast.success('Code copied & opening SHiFT in new tab!', {
-        description: `${code.code} is ready to redeem`,
+      toast.success('Code copied! Opening SHiFT in new tab', {
+        description: `${code.code} — use Ctrl+V to paste`,
       });
-      window.open(getRedeemUrl(code.code), '_blank', 'noopener,noreferrer');
+      window.open(SHIFT_REDEEM_URL, '_blank', 'noopener,noreferrer');
     }
   }, [code.code]);
 
@@ -299,7 +293,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
               className="text-muted-foreground hover:text-primary"
             >
               <a
-                href={getRedeemUrl(code.code)}
+                href={SHIFT_REDEEM_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`Redeem code for ${code.reward}`}
