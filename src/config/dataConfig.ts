@@ -67,3 +67,6 @@ export const STORAGE_KEYS = {
  * v5: Added r/Borderlandsshiftcodes Reddit codes
  */
 export const DATA_VERSION = 5;
+
+/** Official SHiFT redemption URL */
+export const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';

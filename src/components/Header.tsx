@@ -2,15 +2,13 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, Key, RefreshCw, AlertTriangle, Clock, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SHIFT_REDEEM_URL } from '@/config/dataConfig';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-
-/** Official SHiFT redemption URL */
-const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';
 
 /** Data source display names */
 const SOURCE_LABELS: Record<string, string> = {

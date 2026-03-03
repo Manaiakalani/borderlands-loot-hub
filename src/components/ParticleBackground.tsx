@@ -10,8 +10,14 @@ interface Particle {
 
 /**
  * Floating particles background effect - Borderlands vault symbol inspired
+ * Respects prefers-reduced-motion by rendering nothing when motion is reduced.
  */
 export const ParticleBackground = memo(function ParticleBackground() {
+  const prefersReducedMotion = useMemo(
+    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  );
+
   const particles = useMemo<Particle[]>(() => 
     Array.from({ length: 20 }, (_, i) => ({
       id: i,
@@ -22,6 +28,8 @@ export const ParticleBackground = memo(function ParticleBackground() {
     })),
     []
   );
+
+  if (prefersReducedMotion) return null;
 
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10" aria-hidden="true">
