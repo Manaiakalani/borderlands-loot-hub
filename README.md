@@ -24,6 +24,8 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 - 🎮 **Multi-Game Support** - Codes for BL1, BL2, Pre-Sequel, BL3, BL4, and Tiny Tina's Wonderlands
 - 🔍 **Smart Filtering** - Filter by game and code status (active, expired, unknown)
 - 📋 **One-Click Copy** - Instantly copy codes to clipboard
+- 🚀 **Quick Redeem** - Redeem button auto-fills your code on the SHiFT website (no manual paste needed)
+- 🖱️ **Middle-Click Redeem** - Middle mouse button opens Redeem in a new tab with code pre-filled
 - 🆕 **New Today Section** - Highlighted section for freshly added codes
 - ⚡ **Weekly Auto-Refresh** - Automatic data refresh with 7-day cache
 - 🐦 **Twitter Integration** - Pull codes from @Borderlands, @ShiftCodesTK, and more
