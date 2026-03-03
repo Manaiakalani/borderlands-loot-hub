@@ -196,16 +196,14 @@ export function useShiftCodes() {
       setIsStale(false);
     } catch (error) {
       console.error('Failed to load codes:', error);
-      // If we have no codes, load embedded data as last resort
-      if (codes.length === 0) {
-        setCodes(mockShiftCodes);
-        setDataSource('local');
-      }
+      // Load embedded data as last resort
+      setCodes(prev => prev.length === 0 ? mockShiftCodes : prev);
+      setDataSource('local');
     } finally {
       setIsLoading(false);
       fetchingRef.current = false;
     }
-  }, [fetchCodes, codes.length]);
+  }, [fetchCodes]);
 
   /**
    * Checks if data is stale (older than threshold)
