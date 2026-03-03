@@ -5,7 +5,7 @@
 ![Borderlands SHiFT Vault](https://img.shields.io/badge/Borderlands-SHiFT%20Vault-gold?style=for-the-badge&logo=playstation&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 
 **A sleek, Borderlands-themed SHiFT code aggregator for Vault Hunters**
 
@@ -21,12 +21,13 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 
 ## ✨ Features
 
-- 🎮 **Multi-Game Support** - Codes for BL1, BL2, Pre-Sequel, BL3, and Tiny Tina's Wonderlands
+- 🎮 **Multi-Game Support** - Codes for BL1, BL2, Pre-Sequel, BL3, BL4, and Tiny Tina's Wonderlands
 - 🔍 **Smart Filtering** - Filter by game and code status (active, expired, unknown)
 - 📋 **One-Click Copy** - Instantly copy codes to clipboard
 - 🆕 **New Today Section** - Highlighted section for freshly added codes
 - ⚡ **Weekly Auto-Refresh** - Automatic data refresh with 7-day cache
 - 🐦 **Twitter Integration** - Pull codes from @Borderlands, @ShiftCodesTK, and more
+- 🤖 **Reddit Integration** - Daily auto-fetch from r/Borderlands4, r/Borderlands, r/borderlands3, r/Borderlandsshiftcodes
 - 🎨 **Borderlands Theme** - Custom dark theme with vault gold and orange accents
 - ♿ **Accessible** - ARIA labels and keyboard navigation support
 - 📱 **Responsive** - Works great on desktop and mobile
@@ -49,6 +50,9 @@ Codes are aggregated from multiple trusted sources:
 - **[MentalMars.com](https://mentalmars.com)** - Comprehensive SHiFT code database
 - **[Game8.co](https://game8.co/games/Borderlands-4/archives/548406)** - Borderlands 4 codes with expiration info
 - **[r/Borderlandsshiftcodes](https://reddit.com/r/Borderlandsshiftcodes)** - Community-sourced codes from Reddit
+- **[r/Borderlands4](https://reddit.com/r/Borderlands4)** - Borderlands 4 community
+- **[r/Borderlands](https://reddit.com/r/Borderlands)** - Main Borderlands subreddit
+- **[r/borderlands3](https://reddit.com/r/borderlands3)** - Borderlands 3 community
 - **Twitter** - @Borderlands, @ShiftCodesTK, @DuvalMagic (via GitHub Actions)
 
 ## 🚀 Getting Started
@@ -119,15 +123,18 @@ src/
 └── index.css           # Global styles & theme
 .github/
 └── workflows/
-    └── fetch-twitter-codes.yml  # Daily Twitter fetch
+    ├── fetch-twitter-codes.yml  # Daily Twitter fetch
+    └── fetch-reddit-codes.yml   # Daily Reddit fetch
 scripts/
-└── fetch-twitter-codes.mjs      # Twitter fetch script
+├── fetch-twitter-codes.mjs      # Twitter fetch script
+├── fetch-reddit-codes.mjs       # Reddit fetch script (4 subreddits)
+└── fetch-game8-codes.mjs        # Game8.co fetch script
 ```
 
 ## 🎨 Tech Stack
 
 - **Framework:** [React 18](https://react.dev/) with TypeScript
-- **Build Tool:** [Vite 5](https://vitejs.dev/)
+- **Build Tool:** [Vite 7](https://vitejs.dev/)
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) with custom Borderlands theme
 - **UI Components:** [shadcn/ui](https://ui.shadcn.com/) (Radix primitives)
 - **Icons:** [Lucide React](https://lucide.dev/)
@@ -158,6 +165,24 @@ This project uses **GitHub Actions** to automatically fetch SHiFT codes from Twi
 - Fetches tweets from monitored accounts
 - Extracts any SHiFT codes found
 - Automatically commits new codes to `src/data/shiftCodes.ts`
+- You can also trigger it manually from Actions tab
+
+### Reddit Auto-Fetch (GitHub Actions)
+
+SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required — it uses Reddit's public `.json` endpoints.
+
+**Monitored Subreddits:**
+- [r/Borderlands4](https://reddit.com/r/Borderlands4) - BL4 community codes
+- [r/Borderlands](https://reddit.com/r/Borderlands) - Main Borderlands subreddit
+- [r/borderlands3](https://reddit.com/r/borderlands3) - BL3 community codes
+- [r/Borderlandsshiftcodes](https://reddit.com/r/Borderlandsshiftcodes) - Dedicated SHiFT code subreddit
+
+**How it works:**
+- GitHub Actions runs daily at 9 AM UTC
+- Fetches hot and new posts from all four subreddits
+- Extracts SHiFT codes using regex pattern matching
+- Detects game type, reward, and expiration automatically
+- Deduplicates against existing codes and commits new ones to `src/data/shiftCodes.ts`
 - You can also trigger it manually from Actions tab
 
 ### Data Refresh Settings
