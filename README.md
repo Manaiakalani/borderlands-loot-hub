@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Borderlands SHiFT Vault](https://img.shields.io/badge/Borderlands-SHiFT%20Vault-gold?style=for-the-badge&logo=playstation&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 
@@ -135,7 +135,7 @@ scripts/
 
 ## 🎨 Tech Stack
 
-- **Framework:** [React 18](https://react.dev/) with TypeScript
+- **Framework:** [React 19](https://react.dev/) with TypeScript
 - **Build Tool:** [Vite 7](https://vitejs.dev/) with esbuild minification
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) with custom Borderlands theme
 - **UI Components:** [shadcn/ui](https://ui.shadcn.com/) (Radix primitives)
