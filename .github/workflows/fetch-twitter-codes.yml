@@ -1,9 +1,9 @@
 name: Fetch SHiFT Codes from Twitter
 
 on:
-  # Run daily at 8 AM UTC
+  # Run weekly on Mondays at 8 AM UTC
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 8 * * 1'
   
   # Allow manual trigger
   workflow_dispatch:
