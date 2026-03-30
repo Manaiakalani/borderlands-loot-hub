@@ -24,18 +24,23 @@ export default defineConfig(({ mode }) => ({
     // Optimize chunk splitting for better caching
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor chunks for better caching
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['@radix-ui/react-tooltip', '@radix-ui/react-toast'],
-          'query-vendor': ['@tanstack/react-query'],
+        manualChunks(id) {
+          if (id.includes('react-dom') || id.includes('react-router-dom') || id.includes('node_modules/react/')) {
+            return 'react-vendor';
+          }
+          if (id.includes('@radix-ui/react-tooltip') || id.includes('@radix-ui/react-toast')) {
+            return 'ui-vendor';
+          }
+          if (id.includes('@tanstack/react-query')) {
+            return 'query-vendor';
+          }
         },
       },
     },
     // Enable source maps for production debugging (optional)
     sourcemap: false,
     // Minification options
-    minify: 'esbuild',
+    minify: 'oxc',
     // Target modern browsers for smaller bundle
     target: 'esnext',
     // Skip CSS code splitting - inline for faster first paint
