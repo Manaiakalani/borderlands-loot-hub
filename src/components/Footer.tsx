@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Twitter, Github, Heart, Shield } from 'lucide-react';
+import { ExternalLink, Heart, Shield } from 'lucide-react';
+import { GithubIcon as Github, TwitterIcon as Twitter } from '@/components/icons/BrandIcons';
 
 /** External links */
 const SHIFT_OFFICIAL_URL = 'https://shift.gearboxsoftware.com/rewards';

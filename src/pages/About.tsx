@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
-import { Key, Github, Twitter, ExternalLink, Heart, Code, Users } from 'lucide-react';
+import { Key, ExternalLink, Heart, Code, Users } from 'lucide-react';
+import { GithubIcon as Github, TwitterIcon as Twitter } from '@/components/icons/BrandIcons';
 
 const About = memo(() => {
   return (
