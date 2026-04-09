@@ -599,7 +599,7 @@ export const mockShiftCodes: ShiftCode[] = [
     lastVerifiedAt: '2026-04-01',
     expiresAt: '2025-09-14',
     isUniversal: true,
-  },] = [
+  },
   // ============================================
   // REDDIT - Auto-fetched Codes (2026-03-03)
   // ============================================
