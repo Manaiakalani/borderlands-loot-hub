@@ -53,7 +53,49 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  * Note: Many codes work across multiple games (BL1, BL2, TPS, BL3, Wonderlands).
  * These universal codes are duplicated per game for filtering purposes.
  */
-export const mockShiftCodes: ShiftCode[] = [
+export const mockShiftCodes: ShiftCode[
+  // Auto-added from game8.co on 2026-04-15
+  {
+    id: 'game8-bl4-bs6333xr9t',
+    code: 'BS633-3XR9T-W6TJ5-J33JJ-RWT5T',
+    game: 'BL4',
+    status: 'active',
+    reward: 'Golden Key x3',
+    rewardType: 'golden-keys',
+    source: 'game8.co',
+    addedAt: '2026-04-15',
+    lastVerifiedAt: '2026-04-15',
+    expiresAt: '2026-04-14',
+    isUniversal: true,
+  },
+  // Auto-added from game8.co on 2026-04-15
+  {
+    id: 'game8-bl4-3zrt3k59kk',
+    code: '3ZRT3-K59KK-W6BJ5-B3TJ3-9WT99',
+    game: 'BL4',
+    status: 'active',
+    reward: '"Like Vermillion Bucks" Vault Hunter Skin',
+    rewardType: 'skin',
+    source: 'game8.co',
+    addedAt: '2026-04-15',
+    lastVerifiedAt: '2026-04-15',
+    expiresAt: '2030-12-31',
+    isUniversal: true,
+  },
+  // Auto-added from game8.co on 2026-04-15
+  {
+    id: 'game8-bl4-3sfjbsk6zj',
+    code: '3SFJB-SK6ZJ-KRTT5-B3BT3-3ST9W',
+    game: 'BL4',
+    status: 'expired',
+    reward: 'Golden Key x1',
+    rewardType: 'golden-keys',
+    source: 'game8.co',
+    addedAt: '2026-04-15',
+    lastVerifiedAt: '2026-04-15',
+    expiresAt: '2026-04-07',
+    isUniversal: true,
+  },] = [
   // Auto-added from game8.co on 2026-04-01
   {
     id: 'game8-bl4-wh5tbbs5sr',
