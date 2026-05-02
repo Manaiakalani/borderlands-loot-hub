@@ -226,6 +226,7 @@ export function useShiftCodes() {
 
   // Initial load
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, [loadData]);
 
@@ -251,6 +252,7 @@ export function useShiftCodes() {
 
   // Check staleness when lastFetched changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     checkStaleness();
   }, [checkStaleness]);
 

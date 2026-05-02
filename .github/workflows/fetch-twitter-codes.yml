@@ -1,11 +1,8 @@
 name: Fetch SHiFT Codes from Twitter
 
 on:
-  # Run weekly on Mondays at 8 AM UTC
-  schedule:
-    - cron: '0 8 * * 1'
-  
-  # Allow manual trigger
+  # Scheduled runs disabled: X/Twitter API access is no longer available for
+  # this scraping workflow. Kept available for manual trigger only.
   workflow_dispatch:
 
 # Required for pushing commits back to the repository
