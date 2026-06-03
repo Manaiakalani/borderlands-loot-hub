@@ -18,7 +18,14 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHIFT_CODES_PATH = path.join(__dirname, '../src/data/shiftCodes.ts');
 
-const USER_AGENT = 'BorderlandsLootHub/1.0 (SHiFT Code Aggregator)';
+const USER_AGENT = 'Mozilla/5.0 (compatible; BorderlandsLootHubBot/1.0; +https://manaiakalani.github.io/borderlands-loot-hub/)';
+
+const COMMON_HEADERS = {
+  'User-Agent': USER_AGENT,
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Cache-Control': 'no-cache',
+};
 
 // ── Subreddits to scrape ───────────────────────────────────────────
 const SUBREDDITS = [
@@ -123,26 +130,23 @@ function parseExpiration(text) {
  * Fetch posts from a subreddit via the public .json endpoint (no auth needed).
  */
 async function fetchSubredditPosts(subreddit, sort = 'hot', limit = 100) {
-  const url = `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}`;
+  // old.reddit.com is sometimes more permissive than www. for unauthenticated requests.
+  const url = `https://old.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
   console.log(`  📡 Fetching /r/${subreddit}/${sort} ...`);
 
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': USER_AGENT,
-    },
-  });
+  const response = await fetch(url, { headers: COMMON_HEADERS });
 
   if (!response.ok) {
     console.warn(`  ⚠️  /r/${subreddit}/${sort}: ${response.status} ${response.statusText}`);
-    return [];
+    return { posts: [], status: response.status };
   }
 
   try {
     const data = await response.json();
-    return data.data.children.map(child => child.data);
+    return { posts: data.data.children.map(child => child.data), status: 200 };
   } catch {
     console.warn(`  ⚠️  /r/${subreddit}/${sort}: failed to parse JSON response`);
-    return [];
+    return { posts: [], status: 0 };
   }
 }
 
@@ -235,18 +239,25 @@ async function main() {
 
   // 1. Fetch posts from all subreddits
   const allCodes = [];
+  const fetchStatus = { ok: 0, blocked: 0, total: 0 };
 
   for (const subreddit of SUBREDDITS) {
     console.log(`\n📂 r/${subreddit}`);
     try {
-      const [hotPosts, newPosts] = await Promise.all([
+      const [hotResult, newResult] = await Promise.all([
         fetchSubredditPosts(subreddit, 'hot', 50),
         fetchSubredditPosts(subreddit, 'new', 50),
       ]);
 
+      for (const r of [hotResult, newResult]) {
+        fetchStatus.total++;
+        if (r.status === 200) fetchStatus.ok++;
+        else if (r.status === 403 || r.status === 429) fetchStatus.blocked++;
+      }
+
       // Deduplicate posts
       const seenIds = new Set();
-      const uniquePosts = [...hotPosts, ...newPosts].filter(p => {
+      const uniquePosts = [...hotResult.posts, ...newResult.posts].filter(p => {
         if (seenIds.has(p.id)) return false;
         seenIds.add(p.id);
         return true;
@@ -262,6 +273,22 @@ async function main() {
     } catch (error) {
       console.error(`  ❌ Error on r/${subreddit}: ${error.message}`);
     }
+  }
+
+  // Fail loudly if every single request was blocked — silent success was hiding
+  // the fact that Reddit blocks GitHub Actions IPs.
+  if (fetchStatus.total > 0 && fetchStatus.ok === 0) {
+    console.error(
+      `\n❌ All ${fetchStatus.total} Reddit requests were blocked (likely 403 from datacenter IP).`,
+    );
+    console.error(
+      '   Reddit no longer reliably serves unauthenticated .json from cloud IPs.',
+    );
+    console.error(
+      '   To fix: register a Reddit script app and add REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET',
+    );
+    console.error('   secrets, then switch to OAuth (https://www.reddit.com/prefs/apps).');
+    process.exit(1);
   }
 
   // 2. Deduplicate codes globally (keep highest upvotes)
