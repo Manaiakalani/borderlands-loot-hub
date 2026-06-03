@@ -21,11 +21,18 @@
     <meta name="twitter:description" content="Find SHiFT codes for Golden Keys in all Borderlands games!" />
     <meta name="twitter:image" content="https://manaiakalani.github.io/borderlands-loot-hub/og-image.png" />
     <meta name="theme-color" content="#F5B800" />
-    <script
-        src="https://analytics.manaiakalani.info/api/script.js"
-        data-site-id="4b12e896fde9"
-        defer
-    ></script>
+    <script>
+      // Only load analytics on the official deployment so forks don't send data.
+      (function () {
+        var allowed = ["manaiakalani.github.io"];
+        if (allowed.indexOf(window.location.hostname) === -1) return;
+        var s = document.createElement("script");
+        s.src = "https://analytics.manaiakalani.info/api/script.js";
+        s.defer = true;
+        s.setAttribute("data-site-id", "4b12e896fde9");
+        document.head.appendChild(s);
+      })();
+    </script>
   </head>
 
   <body>
