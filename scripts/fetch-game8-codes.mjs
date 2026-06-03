@@ -80,7 +80,13 @@ async function fetchGame8Codes() {
   const response = await fetch(GAME8_URL, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1',
+      'Upgrade-Insecure-Requests': '1',
     },
   });
   
@@ -90,6 +96,21 @@ async function fetchGame8Codes() {
   
   const html = await response.text();
   console.log(`Fetched ${html.length} bytes of HTML`);
+
+  // Detect Cloudflare / bot-challenge stub responses. The real page is ~400KB+
+  // and always contains the SHiFT codes table. If we got a tiny response, the
+  // site is challenging our IP — surface this as a workflow failure instead of
+  // silently reporting "0 codes found".
+  if (html.length < 50000) {
+    throw new Error(
+      `Game8 returned only ${html.length} bytes (expected >50KB). ` +
+      `This usually means Cloudflare is challenging the GitHub Actions IP. ` +
+      `Check the URL or consider using a proxy/scraping service.`,
+    );
+  }
+  if (/cf-(?:browser-verification|challenge)|just a moment/i.test(html)) {
+    throw new Error('Game8 returned a Cloudflare challenge page; aborting.');
+  }
   
   const codes = [];
   const today = new Date().toISOString().split('T')[0];
