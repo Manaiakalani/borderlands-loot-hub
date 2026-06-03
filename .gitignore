@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Temporary scrape outputs from one-shot import scripts
+mm-*.html
+game8.html
+
