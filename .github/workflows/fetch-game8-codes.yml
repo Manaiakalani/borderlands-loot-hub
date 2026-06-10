@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: fetch-game8-codes
@@ -27,6 +28,8 @@ jobs:
         run: npm ci
       - name: Fetch Game8 codes
         run: node scripts/fetch-game8-codes.mjs
+      - name: Validate build
+        run: npm run build
       - name: Check for changes
         id: git-check
         run: |
@@ -37,5 +40,10 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add src/data/shiftCodes.ts
-          git commit -m "🎯 Auto-update SHiFT codes from Game8 [skip ci]"
+          git commit -m "🎯 Auto-update SHiFT codes from Game8"
           git push
+      - name: Trigger deployment
+        if: steps.git-check.outputs.changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-pages.yml --ref main
