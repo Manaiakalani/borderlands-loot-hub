@@ -53,7 +53,7 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  * Note: Many codes work across multiple games (BL1, BL2, TPS, BL3, Wonderlands).
  * These universal codes are duplicated per game for filtering purposes.
  */
-export const mockShiftCodes: ShiftCode[
+export const mockShiftCodes: ShiftCode[] = [
   // Auto-added from game8.co on 2026-06-03
   {
     id: 'game8-bl4-jhrjtw9f93',
@@ -81,7 +81,7 @@ export const mockShiftCodes: ShiftCode[
     lastVerifiedAt: '2026-06-03',
     expiresAt: '2026-05-19',
     isUniversal: true,
-  },] = [
+  },
   // ============================================
   // BL4 - Auto-imported from mentalmars.com (2026-06-03)
   // ============================================

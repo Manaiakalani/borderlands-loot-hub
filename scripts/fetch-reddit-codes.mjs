@@ -11,9 +11,14 @@
  *   Or via GitHub Actions (automatic daily)
  */
 
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  readShiftCodesFile,
+  extractExistingCodeStrings,
+  insertEntriesAfterAnchor,
+  writeShiftCodesFile,
+} from './lib/shift-codes-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHIFT_CODES_PATH = path.join(__dirname, '../src/data/shiftCodes.ts');
@@ -124,30 +129,137 @@ function parseExpiration(text) {
   return null;
 }
 
-// ── Reddit API fetching ────────────────────────────────────────────
+// ── Reddit fetching (no-auth sources) ──────────────────────────────
+//
+// Reddit blocks unauthenticated `.json` requests from datacenter IPs (used by
+// GitHub Actions) with HTTP 403. Two sources still work without API keys:
+//   1. Reddit RSS feeds (`/.rss`) — official, current, more permissive.
+//   2. PullPush.io — a third-party Reddit archive, independent of Reddit's IP
+//      blocking (used as a fallback when RSS is unavailable).
+
+/** Decode the HTML entities Reddit uses inside RSS <content> bodies. */
+function decodeEntities(str) {
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#32;/g, ' ')
+    .replace(/&amp;/g, '&');
+}
 
 /**
- * Fetch posts from a subreddit via the public .json endpoint (no auth needed).
+ * Fetch posts from a subreddit's RSS feed. Returns normalised post objects
+ * compatible with extractCodesFromPost().
  */
-async function fetchSubredditPosts(subreddit, sort = 'hot', limit = 100) {
-  // old.reddit.com is sometimes more permissive than www. for unauthenticated requests.
-  const url = `https://old.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
-  console.log(`  📡 Fetching /r/${subreddit}/${sort} ...`);
+async function fetchSubredditRSS(subreddit, sort = 'new', limit = 100) {
+  const url = `https://www.reddit.com/r/${subreddit}/${sort}/.rss?limit=${limit}`;
+  console.log(`  📡 RSS /r/${subreddit}/${sort} ...`);
 
-  const response = await fetch(url, { headers: COMMON_HEADERS });
+  let response;
+  try {
+    response = await fetch(url, { headers: { ...COMMON_HEADERS, Accept: 'application/atom+xml, application/xml, text/xml, */*' } });
+  } catch (err) {
+    console.warn(`  ⚠️  RSS /r/${subreddit}/${sort}: ${err.message}`);
+    return { posts: [], reachable: false };
+  }
 
   if (!response.ok) {
-    console.warn(`  ⚠️  /r/${subreddit}/${sort}: ${response.status} ${response.statusText}`);
-    return { posts: [], status: response.status };
+    console.warn(`  ⚠️  RSS /r/${subreddit}/${sort}: ${response.status} ${response.statusText}`);
+    return { posts: [], reachable: false };
+  }
+
+  const xml = await response.text();
+  const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(m => m[1]);
+
+  const posts = entries.map(entry => {
+    const title = decodeEntities((entry.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '');
+    const updated = (entry.match(/<updated>([\s\S]*?)<\/updated>/) || [])[1] || '';
+    const link = (entry.match(/<link[^>]*href="([^"]+)"/) || [])[1] || '';
+    const id = (entry.match(/<id>([\s\S]*?)<\/id>/) || [])[1] || link;
+    const rawContent = (entry.match(/<content[^>]*>([\s\S]*?)<\/content>/) || [])[1] || '';
+    const selftext = decodeEntities(rawContent).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const created_utc = updated ? Math.floor(new Date(updated).getTime() / 1000) : Math.floor(Date.now() / 1000);
+    return { id, title, selftext, created_utc, ups: 0, permalink: link };
+  });
+
+  return { posts, reachable: true };
+}
+
+/**
+ * Fallback: fetch posts from PullPush.io (a third-party Reddit archive).
+ */
+async function fetchSubredditPullPush(subreddit, size = 100) {
+  const url = `https://api.pullpush.io/reddit/search/submission/?subreddit=${subreddit}&size=${size}&sort=desc&sort_type=created_utc`;
+  console.log(`  📡 PullPush r/${subreddit} ...`);
+
+  let response;
+  try {
+    response = await fetch(url, { headers: COMMON_HEADERS });
+  } catch (err) {
+    console.warn(`  ⚠️  PullPush r/${subreddit}: ${err.message}`);
+    return { posts: [], reachable: false };
+  }
+
+  if (!response.ok) {
+    console.warn(`  ⚠️  PullPush r/${subreddit}: ${response.status} ${response.statusText}`);
+    return { posts: [], reachable: false };
   }
 
   try {
     const data = await response.json();
-    return { posts: data.data.children.map(child => child.data), status: 200 };
+    const posts = (data.data || []).map(p => ({
+      id: p.id,
+      title: p.title || '',
+      selftext: p.selftext || '',
+      created_utc: p.created_utc,
+      ups: p.score ?? p.ups ?? 0,
+      permalink: p.permalink || '',
+    }));
+    return { posts, reachable: true };
   } catch {
-    console.warn(`  ⚠️  /r/${subreddit}/${sort}: failed to parse JSON response`);
-    return { posts: [], status: 0 };
+    console.warn(`  ⚠️  PullPush r/${subreddit}: failed to parse JSON`);
+    return { posts: [], reachable: false };
   }
+}
+
+/** Deduplicate posts by id. */
+function dedupePosts(posts) {
+  const seen = new Set();
+  return posts.filter(p => {
+    if (seen.has(p.id)) return false;
+    seen.add(p.id);
+    return true;
+  });
+}
+
+/**
+ * Fetch a single subreddit: RSS (new + hot) first, PullPush as fallback.
+ * `reachable` is true if *any* source responded successfully.
+ */
+async function fetchSubreddit(subreddit) {
+  const [rssNew, rssHot] = await Promise.all([
+    fetchSubredditRSS(subreddit, 'new'),
+    fetchSubredditRSS(subreddit, 'hot'),
+  ]);
+
+  let posts = dedupePosts([...rssNew.posts, ...rssHot.posts]);
+  let reachable = rssNew.reachable || rssHot.reachable;
+  let source = 'rss';
+
+  if (posts.length === 0) {
+    const pp = await fetchSubredditPullPush(subreddit);
+    reachable = reachable || pp.reachable;
+    if (pp.posts.length > 0) {
+      posts = pp.posts;
+      source = 'pullpush';
+    }
+  }
+
+  console.log(`  Found ${posts.length} posts via ${source}`);
+  return { posts, reachable };
 }
 
 /**
@@ -185,16 +297,8 @@ function extractCodesFromPost(post, subreddit) {
 // ── shiftCodes.ts read / write ─────────────────────────────────────
 
 function readExistingCodes() {
-  const content = fs.readFileSync(SHIFT_CODES_PATH, 'utf-8');
-
-  const codeStrings = new Set();
-  const codeRegex = /code:\s*['"]([A-Z0-9-]+)['"]/g;
-  let m;
-  while ((m = codeRegex.exec(content)) !== null) {
-    codeStrings.add(m[1]);
-  }
-
-  return { existingCodeStrings: codeStrings, fileContent: content };
+  const content = readShiftCodesFile(SHIFT_CODES_PATH);
+  return { existingCodeStrings: extractExistingCodeStrings(content), fileContent: content };
 }
 
 function generateCodeEntry(code, index) {
@@ -220,15 +324,12 @@ function generateCodeEntry(code, index) {
 function writeNewCodes(fileContent, newCodes) {
   const entries = newCodes.map((c, i) => generateCodeEntry(c, i)).join('\n');
   const today = new Date().toISOString().split('T')[0];
-  const sectionHeader = `// ============================================\n  // REDDIT - Auto-fetched Codes (${today})\n  // ============================================\n${entries}`;
+  const sectionHeader = `  // ============================================\n  // REDDIT - Auto-fetched Codes (${today})\n  // ============================================\n${entries}`;
 
-  // Insert after the opening bracket of the array
-  const updatedContent = fileContent.replace(
-    'export const mockShiftCodes: ShiftCode[] = [',
-    `export const mockShiftCodes: ShiftCode[] = [\n  ${sectionHeader}\n`,
-  );
-
-  fs.writeFileSync(SHIFT_CODES_PATH, updatedContent);
+  // insertEntriesAfterAnchor validates the result before we write, so a bad
+  // insert fails loudly instead of corrupting shiftCodes.ts.
+  const updatedContent = insertEntriesAfterAnchor(fileContent, sectionHeader, newCodes.length);
+  writeShiftCodesFile(SHIFT_CODES_PATH, updatedContent);
 }
 
 // ── Main ───────────────────────────────────────────────────────────
@@ -237,58 +338,35 @@ async function main() {
   console.log('🎮 Reddit SHiFT Code Scraper');
   console.log('============================\n');
 
-  // 1. Fetch posts from all subreddits
+  // 1. Fetch posts from all subreddits (RSS primary, PullPush fallback)
   const allCodes = [];
-  const fetchStatus = { ok: 0, blocked: 0, total: 0 };
+  let anyReachable = false;
 
   for (const subreddit of SUBREDDITS) {
     console.log(`\n📂 r/${subreddit}`);
     try {
-      const [hotResult, newResult] = await Promise.all([
-        fetchSubredditPosts(subreddit, 'hot', 50),
-        fetchSubredditPosts(subreddit, 'new', 50),
-      ]);
+      const { posts, reachable } = await fetchSubreddit(subreddit);
+      if (reachable) anyReachable = true;
 
-      for (const r of [hotResult, newResult]) {
-        fetchStatus.total++;
-        if (r.status === 200) fetchStatus.ok++;
-        else if (r.status === 403 || r.status === 429) fetchStatus.blocked++;
-      }
-
-      // Deduplicate posts
-      const seenIds = new Set();
-      const uniquePosts = [...hotResult.posts, ...newResult.posts].filter(p => {
-        if (seenIds.has(p.id)) return false;
-        seenIds.add(p.id);
-        return true;
-      });
-      console.log(`  Found ${uniquePosts.length} unique posts`);
-
-      for (const post of uniquePosts) {
+      for (const post of posts) {
         allCodes.push(...extractCodesFromPost(post, subreddit));
       }
 
-      // Respect Reddit rate limits (~1 req/sec for unauthenticated)
-      await new Promise(r => setTimeout(r, 2000));
+      // Be polite to the upstream services between subreddits.
+      await new Promise(r => setTimeout(r, 1500));
     } catch (error) {
       console.error(`  ❌ Error on r/${subreddit}: ${error.message}`);
     }
   }
 
-  // Fail loudly if every single request was blocked — silent success was hiding
-  // the fact that Reddit blocks GitHub Actions IPs.
-  if (fetchStatus.total > 0 && fetchStatus.ok === 0) {
-    console.error(
-      `\n❌ All ${fetchStatus.total} Reddit requests were blocked (likely 403 from datacenter IP).`,
+  // Fail *soft* if every source for every subreddit was unreachable. A daily red
+  // X for a best-effort scraper is just noise — we simply do nothing this run.
+  if (!anyReachable) {
+    console.warn(
+      '\n⚠️  All Reddit sources were unreachable this run (RSS + PullPush). ' +
+        'Skipping update; will retry on the next schedule.',
     );
-    console.error(
-      '   Reddit no longer reliably serves unauthenticated .json from cloud IPs.',
-    );
-    console.error(
-      '   To fix: register a Reddit script app and add REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET',
-    );
-    console.error('   secrets, then switch to OAuth (https://www.reddit.com/prefs/apps).');
-    process.exit(1);
+    return;
   }
 
   // 2. Deduplicate codes globally (keep highest upvotes)

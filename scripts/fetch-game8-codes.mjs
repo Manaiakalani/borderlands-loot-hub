@@ -7,9 +7,14 @@
  * Run: node scripts/fetch-game8-codes.mjs
  */
 
-import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import {
+  readShiftCodesFile,
+  extractExistingCodeStrings,
+  insertEntriesAfterAnchor,
+  writeShiftCodesFile,
+} from './lib/shift-codes-file.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -193,15 +198,8 @@ async function fetchGame8Codes() {
  * Read existing codes from shiftCodes.ts
  */
 function getExistingCodes() {
-  const content = readFileSync(SHIFT_CODES_PATH, 'utf-8');
-  const codes = new Set();
-  
-  const matches = content.matchAll(SHIFT_CODE_REGEX);
-  for (const match of matches) {
-    codes.add(match[0].toUpperCase());
-  }
-  
-  return codes;
+  const content = readShiftCodesFile(SHIFT_CODES_PATH);
+  return extractExistingCodeStrings(content);
 }
 
 /**
@@ -226,16 +224,8 @@ async function main() {
     uniqueNewCodes.forEach(c => console.log(`  - ${c.code}: ${c.reward}`));
     
     // Read existing file
-    let content = readFileSync(SHIFT_CODES_PATH, 'utf-8');
-    
-    // Find insertion point (after the first mockShiftCodes = [ line)
-    const insertPoint = content.indexOf('export const mockShiftCodes: ShiftCode[] = [');
-    if (insertPoint === -1) {
-      throw new Error('Could not find mockShiftCodes array in file');
-    }
-    
-    const arrayStart = content.indexOf('[', insertPoint) + 1;
-    
+    const content = readShiftCodesFile(SHIFT_CODES_PATH);
+
     // Generate new code entries
     const newEntries = uniqueNewCodes.map(code => `
   // Auto-added from game8.co on ${new Date().toISOString().split('T')[0]}
@@ -252,13 +242,11 @@ async function main() {
     expiresAt: ${code.expiresAt ? `'${code.expiresAt}'` : 'null'},
     isUniversal: ${code.isUniversal},
   },`).join('');
-    
-    // Insert new codes
-    content = content.slice(0, arrayStart) + newEntries + content.slice(arrayStart);
-    
-    // Write updated file
-    writeFileSync(SHIFT_CODES_PATH, content, 'utf-8');
-    
+
+    // Insert new codes after the array anchor (validated before writing).
+    const updated = insertEntriesAfterAnchor(content, newEntries, uniqueNewCodes.length);
+    writeShiftCodesFile(SHIFT_CODES_PATH, updated);
+
     console.log(`\n✅ Successfully added ${uniqueNewCodes.length} new codes to shiftCodes.ts`);
   } catch (error) {
     console.error('Error:', error.message);
