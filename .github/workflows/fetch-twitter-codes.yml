@@ -5,9 +5,10 @@ on:
   # this scraping workflow. Kept available for manual trigger only.
   workflow_dispatch:
 
-# Required for pushing commits back to the repository
+# Required for pushing commits back to the repository and dispatching deploy
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: fetch-twitter-codes
@@ -35,6 +36,9 @@ jobs:
           TWITTER_BEARER_TOKEN: ${{ secrets.TWITTER_BEARER_TOKEN }}
         run: node scripts/fetch-twitter-codes.mjs
 
+      - name: Validate build
+        run: npm run build
+
       - name: Check for changes
         id: git-check
         run: |
@@ -46,5 +50,11 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add src/data/shiftCodes.ts
-          git commit -m "🔑 Auto-update SHiFT codes from Twitter [skip ci]"
+          git commit -m "🔑 Auto-update SHiFT codes from Twitter"
           git push
+
+      - name: Trigger deployment
+        if: steps.git-check.outputs.changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-pages.yml --ref main

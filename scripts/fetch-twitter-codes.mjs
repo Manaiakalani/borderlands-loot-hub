@@ -5,9 +5,14 @@
  * Or via GitHub Actions (automatic daily)
  */
 
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  readShiftCodesFile,
+  extractExistingCodeStrings,
+  insertEntriesAfterAnchor,
+  writeShiftCodesFile,
+} from './lib/shift-codes-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHIFT_CODES_PATH = path.join(__dirname, '../src/data/shiftCodes.ts');
@@ -171,24 +176,8 @@ function extractCodesFromTweets(tweets, author) {
  * Read existing codes from shiftCodes.ts
  */
 function readExistingCodes() {
-  const content = fs.readFileSync(SHIFT_CODES_PATH, 'utf-8');
-  
-  // Extract the array content using regex
-  const match = content.match(/export const mockShiftCodes: ShiftCode\[\] = \[([\s\S]*?)\];/);
-  if (!match) {
-    console.error('Could not parse existing codes');
-    return { existingCodes: [], fileContent: content };
-  }
-  
-  // Parse existing code strings to dedupe
-  const codeStrings = new Set();
-  const codeRegex = /code:\s*['"]([A-Z0-9-]+)['"]/g;
-  let codeMatch;
-  while ((codeMatch = codeRegex.exec(match[1])) !== null) {
-    codeStrings.add(codeMatch[1]);
-  }
-  
-  return { existingCodeStrings: codeStrings, fileContent: content, arrayContent: match[1] };
+  const content = readShiftCodesFile(SHIFT_CODES_PATH);
+  return { existingCodeStrings: extractExistingCodeStrings(content), fileContent: content };
 }
 
 /**
@@ -249,7 +238,7 @@ async function main() {
   console.log(`\n📊 Total codes found: ${allNewCodes.length}`);
   
   // Read existing codes
-  const { existingCodeStrings, fileContent, arrayContent } = readExistingCodes();
+  const { existingCodeStrings, fileContent } = readExistingCodes();
   console.log(`📁 Existing unique codes: ${existingCodeStrings.size}`);
   
   // Filter out duplicates
@@ -261,29 +250,13 @@ async function main() {
     return;
   }
   
-  // Generate new entries
-  const newEntries = newUniqueCodes.map((c, i) => generateCodeEntry(c, i)).join('');
-  
-  // Find insertion point (after the opening comment block in the array)
-  const insertionMarker = '// ============================================\n  // BORDERLANDS 3 - Active Codes';
-  
-  let updatedContent;
-  if (fileContent.includes(insertionMarker)) {
-    // Insert after the first section header
-    updatedContent = fileContent.replace(
-      insertionMarker,
-      `// ============================================\n  // TWITTER - Auto-fetched Codes (${new Date().toISOString().split('T')[0]})\n  // ============================================${newEntries}\n\n  // ============================================\n  // BORDERLANDS 3 - Active Codes`
-    );
-  } else {
-    // Fallback: insert at the beginning of the array
-    updatedContent = fileContent.replace(
-      'export const mockShiftCodes: ShiftCode[] = [',
-      `export const mockShiftCodes: ShiftCode[] = [${newEntries}`
-    );
-  }
-  
-  // Write updated file
-  fs.writeFileSync(SHIFT_CODES_PATH, updatedContent);
+  // Generate new entries and insert after the array anchor (validated before write).
+  const entries = newUniqueCodes.map((c, i) => generateCodeEntry(c, i)).join('');
+  const today = new Date().toISOString().split('T')[0];
+  const sectionHeader = `  // ============================================\n  // TWITTER - Auto-fetched Codes (${today})\n  // ============================================${entries}`;
+
+  const updatedContent = insertEntriesAfterAnchor(fileContent, sectionHeader, newUniqueCodes.length);
+  writeShiftCodesFile(SHIFT_CODES_PATH, updatedContent);
   
   console.log(`\n✅ Added ${newUniqueCodes.length} new codes to shiftCodes.ts`);
   newUniqueCodes.forEach(c => console.log(`   + ${c.code} (${c.game}) - ${c.reward}`));
