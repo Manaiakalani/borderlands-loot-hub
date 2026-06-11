@@ -54,6 +54,66 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  * These universal codes are duplicated per game for filtering purposes.
  */
 export const mockShiftCodes: ShiftCode[] = [
+  // ============================================
+  // REDDIT - Auto-fetched Codes (2026-06-11)
+  // ============================================
+  {
+    id: 'reddit-bl4-bz6j3-0',
+    code: 'BZ6J3-TBHST-CX3JK-J33T3-9FJ95',
+    game: 'BL4',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'golden-keys',
+    keys: 1,
+    source: 'r/Borderlands',
+    addedAt: '2026-06-05',
+    lastVerifiedAt: '2026-06-11',
+    expiresAt: '2027-06-09',
+    isUniversal: true,
+  },
+  {
+    id: 'reddit-bl4-w9cj3-1',
+    code: 'W9CJ3-9FWZ6-BSCHK-ST3TB-BH6ZJ',
+    game: 'BL4',
+    status: 'unknown',
+    reward: '1 Golden Key',
+    rewardType: 'golden-keys',
+    keys: 1,
+    source: 'r/Borderlandsshiftcodes',
+    addedAt: '2026-03-28',
+    lastVerifiedAt: '2026-06-11',
+    expiresAt: '2027-04-17',
+    isUniversal: true,
+  },
+  {
+    id: 'reddit-bl4-jhxtj-2',
+    code: 'JHXTJ-Z3XHB-5FTJK-T3JJJ-HHJCZ',
+    game: 'BL4',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'golden-keys',
+    keys: 1,
+    source: 'r/Borderlandsshiftcodes',
+    addedAt: '2026-03-06',
+    lastVerifiedAt: '2026-06-11',
+    expiresAt: null,
+    isUniversal: true,
+  },
+  {
+    id: 'reddit-bl2-ksk3b-3',
+    code: 'KSK3B-W9TZF-3SWHW-SJBTJ-JS353',
+    game: 'BL2',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'golden-keys',
+    keys: 1,
+    source: 'r/Borderlandsshiftcodes',
+    addedAt: '2025-08-30',
+    lastVerifiedAt: '2026-06-11',
+    expiresAt: null,
+    isUniversal: true,
+  },
+
   // Auto-added from game8.co on 2026-06-03
   {
     id: 'game8-bl4-jhrjtw9f93',
