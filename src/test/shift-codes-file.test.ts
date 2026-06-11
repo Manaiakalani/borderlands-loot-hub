@@ -4,6 +4,8 @@ import {
   extractExistingCodeStrings,
   insertEntriesAfterAnchor,
   assertValidShiftCodesFile,
+  escapeTsString,
+  pruneExpiredCodes,
 } from "../../scripts/lib/shift-codes-file.mjs";
 
 /**
@@ -71,5 +73,76 @@ describe("shift-codes-file helper", () => {
   it("throws when the array anchor is missing", () => {
     const noAnchor = VALID_FILE.replace(ARRAY_ANCHOR, "export const mockShiftCodes = [");
     expect(() => insertEntriesAfterAnchor(noAnchor, NEW_ENTRY, 1)).toThrow(/anchor/i);
+  });
+
+  it("escapeTsString neutralises quotes, backslashes, newlines, and nullish input", () => {
+    expect(escapeTsString("it's")).toBe("it\\'s");
+    expect(escapeTsString("a\\b")).toBe("a\\\\b");
+    expect(escapeTsString("line1\nline2")).toBe("line1 line2");
+    expect(escapeTsString(null)).toBe("");
+  });
+});
+
+const PRUNE_FILE = `${ARRAY_ANCHOR}
+  // Tiny Tina's Wonderlands codes (comment with an apostrophe + bracket ] to test the scanner)
+  {
+    id: 'old-1',
+    code: 'OLD11-OLD11-OLD11-OLD11-OLD11',
+    game: 'BL4',
+    status: 'expired',
+    reward: 'Old',
+    rewardType: 'other',
+    source: 'test',
+    addedAt: '2000-01-01',
+    expiresAt: '2000-01-01',
+    isUniversal: true,
+  },
+  {
+    id: 'future-1',
+    code: 'NEW11-NEW11-NEW11-NEW11-NEW11',
+    game: 'BL4',
+    status: 'active',
+    reward: 'Future',
+    rewardType: 'other',
+    source: 'test',
+    addedAt: '2026-01-01',
+    expiresAt: '2999-01-01',
+    isUniversal: true,
+  },
+  {
+    id: 'noexp-1',
+    code: 'NOX11-NOX11-NOX11-NOX11-NOX11',
+    game: 'BL4',
+    status: 'unknown',
+    reward: 'NoExpiry',
+    rewardType: 'other',
+    source: 'test',
+    addedAt: '2026-01-01',
+    expiresAt: null,
+    isUniversal: true,
+  },
+];
+`;
+
+describe("pruneExpiredCodes", () => {
+  const now = new Date("2026-06-10T00:00:00Z");
+
+  it("removes only codes expired beyond the threshold, keeps the rest, stays valid", () => {
+    const { content, removedCodes } = pruneExpiredCodes(PRUNE_FILE, { thresholdDays: 90, now });
+    expect(removedCodes).toEqual(["OLD11-OLD11-OLD11-OLD11-OLD11"]);
+    expect(content).not.toContain("OLD11-OLD11-OLD11-OLD11-OLD11");
+    expect(content).toContain("NEW11-NEW11-NEW11-NEW11-NEW11");
+    expect(content).toContain("NOX11-NOX11-NOX11-NOX11-NOX11");
+    expect(extractExistingCodeStrings(content).size).toBe(2);
+    expect(() => assertValidShiftCodesFile(content)).not.toThrow();
+  });
+
+  it("removes nothing when no code is old enough", () => {
+    const { content, removedCodes } = pruneExpiredCodes(PRUNE_FILE, {
+      thresholdDays: 100 * 365,
+      now,
+    });
+    expect(removedCodes).toEqual([]);
+    expect(content).toBe(PRUNE_FILE);
   });
 });

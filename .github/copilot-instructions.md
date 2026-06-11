@@ -132,20 +132,26 @@ import { cn } from '@/lib/utils';
 ### GitHub Actions Integration
 
 The `fetch-twitter-codes.yml` workflow:
-- Runs daily at 8 AM UTC
-- Uses `TWITTER_BEARER_TOKEN` secret
+- Scheduled runs are **disabled** (X/Twitter API access is no longer available); manual `workflow_dispatch` only
+- Uses `TWITTER_BEARER_TOKEN` secret when run manually
 - Commits new codes directly to `shiftCodes.ts`
-- Uses `[skip ci]` to prevent recursive builds
 
 The `fetch-reddit-codes.yml` workflow:
 - Runs daily at 9 AM UTC (offset from Twitter)
-- Uses Reddit's public `.json` endpoints — no API keys or secrets needed
+- No API keys or secrets needed. Reddit 403-blocks the unauthenticated `.json`
+  endpoint from GitHub Actions IPs, so it fetches via **Reddit RSS feeds** (`/.rss`,
+  primary) with **PullPush.io** (third-party Reddit archive) as a fallback
 - Scrapes 4 subreddits: r/Borderlands4, r/Borderlands, r/borderlands3, r/Borderlandsshiftcodes
+- Exits 0 gracefully when every source is blocked (so it doesn't fail red daily); still commits codes whenever a source returns data
 - Commits new codes directly to `shiftCodes.ts`
-- Uses `[skip ci]` to prevent recursive builds
+
+**Shared safety net:** all fetch scripts insert via `scripts/lib/shift-codes-file.mjs`,
+a validated helper that refuses to write malformed output. The workflows also run
+`npm run build` as a gate before committing, then dispatch `deploy-pages.yml` so new
+codes reach the live site.
 
 **When debugging Twitter fetching**: Check `scripts/fetch-twitter-codes.mjs` (Node.js script, not browser code).
-**When debugging Reddit fetching**: Check `scripts/fetch-reddit-codes.mjs` (Node.js script, uses Reddit OAuth2 API).
+**When debugging Reddit fetching**: Check `scripts/fetch-reddit-codes.mjs` (Node.js script using Reddit RSS feeds + PullPush.io, no auth).
 
 ## Testing Patterns
 
