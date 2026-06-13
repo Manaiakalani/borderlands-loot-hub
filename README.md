@@ -180,7 +180,7 @@ This project uses **GitHub Actions** to automatically fetch SHiFT codes from Twi
 
 ### Reddit Auto-Fetch (GitHub Actions)
 
-SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required — it uses Reddit's public `.json` endpoints.
+SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required — Reddit blocks the unauthenticated `.json` endpoint from datacenter IPs, so it fetches via Reddit RSS feeds (primary) with [PullPush.io](https://pullpush.io) as a fallback.
 
 **Monitored Subreddits:**
 - [r/Borderlands4](https://reddit.com/r/Borderlands4) - BL4 community codes

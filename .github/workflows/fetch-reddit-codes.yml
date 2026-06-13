@@ -52,6 +52,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add src/data/shiftCodes.ts
           git commit -m "🎮 Auto-update SHiFT codes from Reddit"
+          git pull --rebase origin main
           git push
 
       - name: Trigger deployment

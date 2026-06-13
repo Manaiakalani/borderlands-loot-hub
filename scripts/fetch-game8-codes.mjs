@@ -14,6 +14,7 @@ import {
   extractExistingCodeStrings,
   insertEntriesAfterAnchor,
   writeShiftCodesFile,
+  escapeTsString,
 } from './lib/shift-codes-file.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -234,7 +235,7 @@ async function main() {
     code: '${code.code}',
     game: '${code.game}',
     status: '${code.status}',
-    reward: '${code.reward.replace(/'/g, "\\'")}',
+    reward: '${escapeTsString(code.reward)}',
     rewardType: '${code.rewardType}',${code.keys ? `\n    keys: ${code.keys},` : ''}
     source: '${code.source}',
     addedAt: '${code.addedAt}',

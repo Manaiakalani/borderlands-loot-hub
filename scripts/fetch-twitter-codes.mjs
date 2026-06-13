@@ -12,6 +12,7 @@ import {
   extractExistingCodeStrings,
   insertEntriesAfterAnchor,
   writeShiftCodesFile,
+  escapeTsString,
 } from './lib/shift-codes-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -190,9 +191,9 @@ function generateCodeEntry(code, index) {
     code: '${code.code}',
     game: '${code.game}',
     status: 'unknown',
-    reward: '${code.reward.replace(/'/g, "\\'")}',
+    reward: '${escapeTsString(code.reward)}',
     rewardType: '${code.rewardType}',
-    source: 'Twitter ${code.author}',
+    source: 'Twitter ${escapeTsString(code.author)}',
     addedAt: '${code.tweetDate}',
     isUniversal: ${code.isUniversal},
   },`;

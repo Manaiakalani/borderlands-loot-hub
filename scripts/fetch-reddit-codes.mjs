@@ -12,12 +12,13 @@
  */
 
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import {
   readShiftCodesFile,
   extractExistingCodeStrings,
   insertEntriesAfterAnchor,
   writeShiftCodesFile,
+  escapeTsString,
 } from './lib/shift-codes-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -311,9 +312,9 @@ function generateCodeEntry(code, index) {
     code: '${code.code}',
     game: '${code.game}',
     status: '${status}',
-    reward: '${(code.reward ?? 'SHiFT Reward').replace(/'/g, "\\'")}',
+    reward: '${escapeTsString(code.reward ?? 'SHiFT Reward')}',
     rewardType: '${code.rewardType}',${code.keys ? `\n    keys: ${code.keys},` : ''}
-    source: 'r/${code.subreddit}',
+    source: 'r/${escapeTsString(code.subreddit)}',
     addedAt: '${code.postDate}',
     lastVerifiedAt: '${today}',
     expiresAt: ${code.expiresAt ? `'${code.expiresAt}'` : 'null'},
@@ -403,7 +404,21 @@ async function main() {
   }
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+export {
+  decodeEntities,
+  detectGame,
+  detectRewardType,
+  extractKeyCount,
+  extractRewardLabel,
+  parseExpiration,
+  extractCodesFromPost,
+};
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain) {
+  main().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}

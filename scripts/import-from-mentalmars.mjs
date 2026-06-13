@@ -5,9 +5,15 @@
  *
  * Run from repo root:  node scripts/import-from-mentalmars.mjs
  */
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  readShiftCodesFile,
+  extractExistingCodeStrings,
+  insertEntriesAfterAnchor,
+  writeShiftCodesFile,
+  escapeTsString,
+} from './lib/shift-codes-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHIFT_CODES_PATH = path.join(__dirname, '../src/data/shiftCodes.ts');
@@ -82,10 +88,8 @@ async function fetchSource({ game, source, url }) {
 }
 
 function readExisting() {
-  const content = fs.readFileSync(SHIFT_CODES_PATH, 'utf-8');
-  const set = new Set();
-  for (const m of content.matchAll(/code:\s*['"]([A-Z0-9-]+)['"]/g)) set.add(m[1]);
-  return { content, set };
+  const content = readShiftCodesFile(SHIFT_CODES_PATH);
+  return { content, set: extractExistingCodeStrings(content) };
 }
 
 function buildEntry(c, today) {
@@ -98,7 +102,7 @@ function buildEntry(c, today) {
     `    code: '${c.code}',`,
     `    game: '${c.game}',`,
     `    status: '${status}',`,
-    `    reward: '${c.reward.replace(/'/g, "\\'")}',`,
+    `    reward: '${escapeTsString(c.reward)}',`,
     `    rewardType: '${c.rewardType}',`,
   ];
   if (c.keys) lines.push(`    keys: ${c.keys},`);
@@ -155,13 +159,9 @@ async function main() {
   }
   const insert = blocks.join('\n') + '\n';
 
-  // Insert right after the opening of the array
-  const updated = content.replace(
-    /(export const mockShiftCodes:\s*ShiftCode\[\]\s*=\s*\[\r?\n)/,
-    `$1${insert}`,
-  );
-  if (updated === content) throw new Error('Failed to find mockShiftCodes array opening');
-  fs.writeFileSync(SHIFT_CODES_PATH, updated);
+  // Insert right after the array anchor; validated before writing.
+  const updated = insertEntriesAfterAnchor(content, insert, newCodes.length);
+  writeShiftCodesFile(SHIFT_CODES_PATH, updated);
 
   console.log(`\n✅ Inserted ${newCodes.length} new codes:`);
   const counts = {};

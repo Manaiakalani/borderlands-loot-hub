@@ -18,6 +18,21 @@ export const ARRAY_ANCHOR = 'export const mockShiftCodes: ShiftCode[] = [';
 /** Matches a `code: 'XXXXX-...'` field, used to count/extract existing codes. */
 const CODE_FIELD_REGEX = /code:\s*['"]([A-Z0-9-]+)['"]/gi;
 
+/**
+ * Escape an arbitrary (possibly scraped) string so it is safe to embed inside a
+ * single-quoted TypeScript string literal. Handles backslashes and quotes, and
+ * collapses newlines / strips control characters so a crafted value can't break
+ * the generated file.
+ */
+export function escapeTsString(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r?\n/g, ' ')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .trim();
+}
+
 export function readShiftCodesFile(path) {
   return readFileSync(path, 'utf-8');
 }
@@ -102,4 +117,127 @@ export function insertEntriesAfterAnchor(content, entriesBlock, expectedNewCount
 export function writeShiftCodesFile(path, content) {
   assertValidShiftCodesFile(content);
   writeFileSync(path, content, 'utf-8');
+}
+
+/**
+ * Skip a quoted string starting at `i` (which points at the opening quote).
+ * Handles backslash escapes. Returns the index just past the closing quote.
+ */
+function skipString(content, i, quote) {
+  i++;
+  while (i < content.length) {
+    const ch = content[i];
+    if (ch === '\\') { i += 2; continue; }
+    if (ch === quote) return i + 1;
+    i++;
+  }
+  return i;
+}
+
+/**
+ * Parse the mockShiftCodes array, returning the array bracket bounds and the
+ * span of every top-level entry object. Aware of `//` and block comments and of
+ * string literals, so apostrophes-in-comments and brackets-in-strings can't
+ * throw off the brace/bracket counting.
+ */
+function parseShiftCodesArray(content) {
+  const anchorPos = content.indexOf(ARRAY_ANCHOR);
+  if (anchorPos === -1) {
+    throw new Error(`Could not find the mockShiftCodes array anchor ("${ARRAY_ANCHOR}").`);
+  }
+  // The array-opening "[" is the final character of the anchor (using indexOf('[')
+  // would wrongly match the "[" inside the `ShiftCode[]` type annotation).
+  const open = anchorPos + ARRAY_ANCHOR.length - 1;
+
+  let i = open + 1;
+  let bracketDepth = 1;
+  let braceDepth = 0;
+  let objStart = -1;
+  let arrayClose = -1;
+  const objects = [];
+
+  while (i < content.length) {
+    const ch = content[i];
+    if (ch === '/' && content[i + 1] === '/') {
+      const nl = content.indexOf('\n', i);
+      i = nl === -1 ? content.length : nl;
+      continue;
+    }
+    if (ch === '/' && content[i + 1] === '*') {
+      const close = content.indexOf('*/', i + 2);
+      i = close === -1 ? content.length : close + 2;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      i = skipString(content, i, ch);
+      continue;
+    }
+    if (ch === '[') {
+      bracketDepth++;
+    } else if (ch === ']') {
+      bracketDepth--;
+      if (bracketDepth === 0) { arrayClose = i; break; }
+    } else if (ch === '{') {
+      if (braceDepth === 0) objStart = i;
+      braceDepth++;
+    } else if (ch === '}') {
+      braceDepth--;
+      if (braceDepth === 0 && objStart !== -1) {
+        objects.push({ start: objStart, endBrace: i });
+        objStart = -1;
+      }
+    }
+    i++;
+  }
+
+  if (arrayClose === -1) {
+    throw new Error('Could not find the closing "]" of the mockShiftCodes array.');
+  }
+  return { open, close: arrayClose, objects };
+}
+
+/**
+ * Remove code entries whose `expiresAt` is older than `thresholdDays` before
+ * `now`. Pure function: returns { content, removedCodes } without writing.
+ * Entries with no `expiresAt`, or expired more recently than the threshold, are
+ * kept (the app intentionally still displays recently-expired codes).
+ */
+export function pruneExpiredCodes(content, { thresholdDays = 90, now = new Date() } = {}) {
+  const { close, objects } = parseShiftCodesArray(content);
+  const cutoffMs = now.getTime() - thresholdDays * 24 * 60 * 60 * 1000;
+
+  const removals = [];
+  for (const { start, endBrace } of objects) {
+    let end = endBrace + 1;
+    while (end < close && /\s/.test(content[end])) end++;
+    if (content[end] === ',') end++;
+
+    const objText = content.slice(start, endBrace + 1);
+    const expiresAt = (objText.match(/expiresAt:\s*'([^']+)'/) || [])[1] || null;
+    const code = (objText.match(/code:\s*'([^']+)'/) || [])[1] || '?';
+
+    if (expiresAt) {
+      const expMs = new Date(expiresAt).getTime();
+      if (!Number.isNaN(expMs) && expMs < cutoffMs) {
+        removals.push({ start, end, code });
+      }
+    }
+  }
+
+  if (removals.length === 0) return { content, removedCodes: [] };
+
+  let result = content;
+  const removedCodes = [];
+  for (let r = removals.length - 1; r >= 0; r--) {
+    let { start } = removals[r];
+    const { end, code } = removals[r];
+    // Consume the indentation and the single newline preceding the object.
+    while (start > 0 && (content[start - 1] === ' ' || content[start - 1] === '\t')) start--;
+    if (content[start - 1] === '\n') start--;
+    result = result.slice(0, start) + result.slice(end);
+    removedCodes.push(code);
+  }
+
+  assertValidShiftCodesFile(result);
+  return { content: result, removedCodes: removedCodes.reverse() };
 }
