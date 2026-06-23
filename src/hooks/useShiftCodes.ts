@@ -1,8 +1,66 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { mockShiftCodes, ShiftCode, isCodeExpired, getEffectiveStatus } from '@/data/shiftCodes';
+import { mockShiftCodes, ShiftCode, isCodeExpired, getEffectiveStatus, GameType, CodeStatus, RewardType } from '@/data/shiftCodes';
 import { DATA_CONFIG, STORAGE_KEYS, DATA_VERSION } from '@/config/dataConfig';
 
 const RECENT_DAYS_THRESHOLD = 3;
+const VALID_GAMES = new Set<GameType>(['BL1', 'BL2', 'TPS', 'BL3', 'BL4', 'WONDERLANDS']);
+const VALID_STATUSES = new Set<CodeStatus>(['active', 'expired', 'unknown']);
+const VALID_REWARD_TYPES = new Set<RewardType>(['golden-keys', 'skeleton-keys', 'diamond-keys', 'skin', 'cosmetic', 'weapon', 'other']);
+
+const sanitizeCacheText = (value: unknown, fallback = ''): string => {
+  if (typeof value !== 'string') return fallback;
+
+  const cleaned = Array.from(value).map((char) => {
+    const codePoint = char.charCodeAt(0);
+    return codePoint >= 0x20 && codePoint !== 0x7f ? char : ' ';
+  }).join('').replace(/\s+/g, ' ').trim();
+
+  return cleaned.length > 200 ? cleaned.slice(0, 200) : cleaned || fallback;
+};
+
+const normalizeCodes = (codes: unknown): ShiftCode[] => {
+  if (!Array.isArray(codes)) return [];
+
+  return codes.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const candidate = entry as Partial<ShiftCode> & Record<string, unknown>;
+
+    if (typeof candidate.id !== 'string' || !candidate.id.trim()) return [];
+    if (typeof candidate.code !== 'string' || !/^[A-Z0-9]{5}(?:-[A-Z0-9]{5}){4}$/.test(candidate.code.toUpperCase())) return [];
+    if (typeof candidate.game !== 'string' || !VALID_GAMES.has(candidate.game as GameType)) return [];
+    if (typeof candidate.status !== 'string' || !VALID_STATUSES.has(candidate.status as CodeStatus)) return [];
+    if (typeof candidate.reward !== 'string') return [];
+    if (typeof candidate.rewardType !== 'string' || !VALID_REWARD_TYPES.has(candidate.rewardType as RewardType)) return [];
+    if (candidate.source !== undefined && typeof candidate.source !== 'string') return [];
+    if (typeof candidate.addedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate.addedAt)) return [];
+
+    const normalized: ShiftCode = {
+      id: candidate.id.trim(),
+      code: candidate.code.toUpperCase(),
+      game: candidate.game as GameType,
+      status: candidate.status as CodeStatus,
+      reward: sanitizeCacheText(candidate.reward, 'SHiFT Reward'),
+      rewardType: candidate.rewardType as RewardType,
+      source: sanitizeCacheText(candidate.source, 'unknown'),
+      addedAt: candidate.addedAt,
+    };
+
+    if (typeof candidate.keys === 'number' && Number.isInteger(candidate.keys)) {
+      normalized.keys = candidate.keys;
+    }
+    if (typeof candidate.expiresAt === 'string' || candidate.expiresAt === null) {
+      normalized.expiresAt = candidate.expiresAt;
+    }
+    if (typeof candidate.lastVerifiedAt === 'string' || candidate.lastVerifiedAt === null) {
+      normalized.lastVerifiedAt = candidate.lastVerifiedAt;
+    }
+    if (typeof candidate.isUniversal === 'boolean') {
+      normalized.isUniversal = candidate.isUniversal;
+    }
+
+    return [normalized];
+  });
+};
 
 interface CacheData {
   codes: ShiftCode[];
@@ -33,8 +91,18 @@ const getCachedData = (): CacheData | null => {
     const cached = localStorage.getItem(STORAGE_KEYS.CODES_CACHE);
     if (!cached) return null;
     
-    const cacheData: CacheData = JSON.parse(cached);
-    
+    const parsed = JSON.parse(cached);
+    if (!parsed || typeof parsed !== 'object') {
+      localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+      return null;
+    }
+
+    const cacheData = parsed as Partial<CacheData> & Record<string, unknown>;
+    if (typeof cacheData.version !== 'number' || typeof cacheData.timestamp !== 'number' || typeof cacheData.source !== 'string') {
+      localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+      return null;
+    }
+
     // Invalidate cache if data version changed
     if (cacheData.version !== DATA_VERSION) {
       localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
@@ -47,8 +115,19 @@ const getCachedData = (): CacheData | null => {
     if (isExpired) {
       return null;
     }
+
+    const normalizedCodes = normalizeCodes(cacheData.codes);
+    if (normalizedCodes.length === 0 && Array.isArray(cacheData.codes) && cacheData.codes.length > 0) {
+      localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+      return null;
+    }
     
-    return cacheData;
+    return {
+      codes: normalizedCodes,
+      timestamp: cacheData.timestamp,
+      version: cacheData.version,
+      source: cacheData.source === 'remote' ? 'remote' : 'local',
+    };
   } catch (e) {
     localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
     return null;
@@ -60,7 +139,7 @@ const getCachedData = (): CacheData | null => {
  */
 const setCacheData = (codes: ShiftCode[], source: 'local' | 'remote'): void => {
   const cacheData: CacheData = {
-    codes,
+    codes: normalizeCodes(codes),
     timestamp: Date.now(),
     version: DATA_VERSION,
     source,
@@ -95,9 +174,10 @@ const fetchRemoteCodes = async (): Promise<ShiftCode[] | null> => {
     const data = await response.json();
     
     // Handle different response formats (direct array or wrapped in object)
-    const codes: ShiftCode[] = Array.isArray(data) ? data : data.codes || data.record || [];
+    const parsed = Array.isArray(data) ? data : data.codes || data.record || [];
+    const codes = normalizeCodes(parsed);
     
-    if (!Array.isArray(codes) || codes.length === 0) {
+    if (codes.length === 0) {
       throw new Error('Invalid data format: expected non-empty array of codes');
     }
 

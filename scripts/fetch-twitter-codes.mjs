@@ -13,6 +13,8 @@ import {
   insertEntriesAfterAnchor,
   writeShiftCodesFile,
   escapeTsString,
+  sanitizeText,
+  assertValidCodeShape,
 } from './lib/shift-codes-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -20,7 +22,7 @@ const SHIFT_CODES_PATH = path.join(__dirname, '../src/data/shiftCodes.ts');
 
 // Twitter API config
 const TWITTER_API_BASE = 'https://api.twitter.com/2';
-const BEARER_TOKEN = process.env.TWITTER_BEARER_TOKEN;
+const BEARER_TOKEN = process.env.TWITTER_BEARER_TOKEN?.trim();
 
 const ACCOUNTS = [
   { username: 'Borderlands', displayName: '@Borderlands (Official)' },
@@ -50,13 +52,18 @@ const SHIFT_KEYWORDS = ['shift code', 'golden key', 'skeleton key', 'diamond key
 /**
  * Detect which game a tweet is about
  */
+function normalizeText(value, fallback = '') {
+  return sanitizeText(value, { maxLength: 300, fallback });
+}
+
 function detectGame(text) {
-  if (GAME_PATTERNS.WONDERLANDS.test(text)) return 'WONDERLANDS';
-  if (GAME_PATTERNS.BL3.test(text)) return 'BL3';
-  if (GAME_PATTERNS.TPS.test(text)) return 'TPS';
-  if (GAME_PATTERNS.BL2.test(text)) return 'BL2';
-  if (GAME_PATTERNS.BL1.test(text)) return 'BL1';
-  if (/borderlands/i.test(text)) return 'BL3'; // Default
+  const normalizedText = normalizeText(text, '');
+  if (GAME_PATTERNS.WONDERLANDS.test(normalizedText)) return 'WONDERLANDS';
+  if (GAME_PATTERNS.BL3.test(normalizedText)) return 'BL3';
+  if (GAME_PATTERNS.TPS.test(normalizedText)) return 'TPS';
+  if (GAME_PATTERNS.BL2.test(normalizedText)) return 'BL2';
+  if (GAME_PATTERNS.BL1.test(normalizedText)) return 'BL1';
+  if (/borderlands/i.test(normalizedText)) return 'BL3'; // Default
   return null;
 }
 
@@ -64,14 +71,15 @@ function detectGame(text) {
  * Extract reward description from tweet
  */
 function extractReward(text) {
-  const keyMatch = text.match(/(\d+)\s*(golden|skeleton|diamond)?\s*keys?/i);
+  const normalizedText = normalizeText(text, '');
+  const keyMatch = normalizedText.match(/(\d+)\s*(golden|skeleton|diamond)?\s*keys?/i);
   if (keyMatch) {
     const count = keyMatch[1];
     const type = keyMatch[2]?.toLowerCase() || 'golden';
     return `${count} ${type.charAt(0).toUpperCase() + type.slice(1)} Key${parseInt(count) > 1 ? 's' : ''}`;
   }
-  if (text.toLowerCase().includes('head') || text.toLowerCase().includes('skin')) return 'Cosmetic Reward';
-  if (text.toLowerCase().includes('weapon')) return 'Weapon Reward';
+  if (normalizedText.toLowerCase().includes('head') || normalizedText.toLowerCase().includes('skin')) return 'Cosmetic Reward';
+  if (normalizedText.toLowerCase().includes('weapon')) return 'Weapon Reward';
   return 'SHiFT Reward';
 }
 
@@ -79,7 +87,7 @@ function extractReward(text) {
  * Determine reward type
  */
 function getRewardType(text) {
-  const lower = text.toLowerCase();
+  const lower = normalizeText(text, '').toLowerCase();
   if (lower.includes('skeleton')) return 'skeleton-keys';
   if (lower.includes('diamond')) return 'diamond-keys';
   if (lower.includes('key')) return 'golden-keys';
@@ -103,7 +111,8 @@ async function getUserId(username) {
   }
   
   const data = await response.json();
-  return data.data?.id;
+  const userId = data?.data?.id;
+  return typeof userId === 'string' ? userId : null;
 }
 
 /**
@@ -128,7 +137,7 @@ async function fetchUserTweets(userId) {
   }
   
   const data = await response.json();
-  return data.data || [];
+  return Array.isArray(data?.data) ? data.data : [];
 }
 
 /**
@@ -138,7 +147,11 @@ function extractCodesFromTweets(tweets, author) {
   const codes = [];
   
   for (const tweet of tweets) {
-    const text = tweet.text;
+    if (!tweet || typeof tweet !== 'object') continue;
+
+    const text = normalizeText(tweet.text, '');
+    const tweetDate = normalizeText(tweet.created_at, '');
+    const tweetId = normalizeText(tweet.id, '');
     
     // Check if tweet is about SHiFT codes
     const isShiftTweet = SHIFT_KEYWORDS.some(kw => text.toLowerCase().includes(kw)) ||
@@ -156,17 +169,24 @@ function extractCodesFromTweets(tweets, author) {
       const game = detectGame(text);
       const reward = extractReward(text);
       const rewardType = getRewardType(text);
-      
-      codes.push({
+      const codeEntry = {
+        id: `twitter-${tweetId || 'unknown'}-${code}`,
         code,
         game: game || 'BL3',
+        status: 'unknown',
         reward,
         rewardType,
-        tweetId: tweet.id,
-        tweetDate: tweet.created_at.split('T')[0],
-        author,
+        source: `Twitter ${normalizeText(author, 'unknown')}`,
+        addedAt: tweetDate ? tweetDate.split('T')[0] : new Date().toISOString().split('T')[0],
+        lastVerifiedAt: new Date().toISOString().split('T')[0],
         isUniversal: !game,
-      });
+        tweetId,
+        tweetDate: tweetDate ? tweetDate.split('T')[0] : new Date().toISOString().split('T')[0],
+        author: normalizeText(author, 'unknown'),
+      };
+
+      assertValidCodeShape(codeEntry);
+      codes.push(codeEntry);
     }
   }
   

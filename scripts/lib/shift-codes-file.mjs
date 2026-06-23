@@ -17,6 +17,10 @@ export const ARRAY_ANCHOR = 'export const mockShiftCodes: ShiftCode[] = [';
 
 /** Matches a `code: 'XXXXX-...'` field, used to count/extract existing codes. */
 const CODE_FIELD_REGEX = /code:\s*['"]([A-Z0-9-]+)['"]/gi;
+const SAFE_CODE_PATTERN = /^[A-Z0-9]{5}(?:-[A-Z0-9]{5}){4}$/;
+const SAFE_GAMES = new Set(['BL1', 'BL2', 'TPS', 'BL3', 'BL4', 'WONDERLANDS']);
+const SAFE_REWARD_TYPES = new Set(['golden-keys', 'skeleton-keys', 'diamond-keys', 'skin', 'cosmetic', 'weapon', 'other']);
+const SAFE_STATUSES = new Set(['active', 'expired', 'unknown']);
 
 /**
  * Escape an arbitrary (possibly scraped) string so it is safe to embed inside a
@@ -31,6 +35,74 @@ export function escapeTsString(value) {
     .replace(/\r?\n/g, ' ')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .trim();
+}
+
+export function sanitizeText(value, { maxLength = 200, fallback = '' } = {}) {
+  if (typeof value !== 'string') return fallback;
+
+  const cleaned = value
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned || fallback;
+}
+
+export function assertValidCodeShape(code) {
+  if (!code || typeof code !== 'object') {
+    throw new Error('Expected a code object.');
+  }
+
+  const candidate = code;
+  if (typeof candidate.id !== 'string' || candidate.id.length > 100 || candidate.id.trim() === '') {
+    throw new Error('Invalid code id.');
+  }
+
+  if (typeof candidate.code !== 'string' || !SAFE_CODE_PATTERN.test(candidate.code.toUpperCase())) {
+    throw new Error(`Invalid SHiFT code: ${candidate.code}`);
+  }
+
+  if (typeof candidate.game !== 'string' || !SAFE_GAMES.has(candidate.game.toUpperCase())) {
+    throw new Error(`Invalid game value: ${candidate.game}`);
+  }
+
+  if (typeof candidate.status !== 'string' || !SAFE_STATUSES.has(candidate.status)) {
+    throw new Error(`Invalid status: ${candidate.status}`);
+  }
+
+  if (typeof candidate.reward !== 'string' || candidate.reward.length > 200) {
+    throw new Error(`Invalid reward text: ${candidate.reward}`);
+  }
+
+  if (typeof candidate.rewardType !== 'string' || !SAFE_REWARD_TYPES.has(candidate.rewardType)) {
+    throw new Error(`Invalid rewardType: ${candidate.rewardType}`);
+  }
+
+  if (candidate.keys !== undefined && (!Number.isInteger(candidate.keys) || candidate.keys < 1 || candidate.keys > 99)) {
+    throw new Error(`Invalid key count: ${candidate.keys}`);
+  }
+
+  if (candidate.expiresAt !== undefined && candidate.expiresAt !== null && typeof candidate.expiresAt !== 'string') {
+    throw new Error(`Invalid expiresAt: ${candidate.expiresAt}`);
+  }
+
+  if (candidate.lastVerifiedAt !== undefined && candidate.lastVerifiedAt !== null && typeof candidate.lastVerifiedAt !== 'string') {
+    throw new Error(`Invalid lastVerifiedAt: ${candidate.lastVerifiedAt}`);
+  }
+
+  if (typeof candidate.source !== 'string' || candidate.source.length > 200) {
+    throw new Error(`Invalid source: ${candidate.source}`);
+  }
+
+  if (typeof candidate.addedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate.addedAt)) {
+    throw new Error(`Invalid addedAt: ${candidate.addedAt}`);
+  }
+
+  if (candidate.isUniversal !== undefined && typeof candidate.isUniversal !== 'boolean') {
+    throw new Error(`Invalid isUniversal: ${candidate.isUniversal}`);
+  }
+
+  return true;
 }
 
 export function readShiftCodesFile(path) {
