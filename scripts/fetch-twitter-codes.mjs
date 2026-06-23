@@ -6,7 +6,7 @@
  */
 
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import {
   readShiftCodesFile,
   extractExistingCodeStrings,
@@ -283,7 +283,10 @@ async function main() {
   newUniqueCodes.forEach(c => console.log(`   + ${c.code} (${c.game}) - ${c.reward}`));
 }
 
-main().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+// Only run main() when executed directly (not when imported by tests)
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}
