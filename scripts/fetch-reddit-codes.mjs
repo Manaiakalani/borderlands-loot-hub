@@ -19,6 +19,8 @@ import {
   insertEntriesAfterAnchor,
   writeShiftCodesFile,
   escapeTsString,
+  sanitizeText,
+  assertValidCodeShape,
 } from './lib/shift-codes-file.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,38 +74,47 @@ const REWARD_PATTERNS = {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
+function normalizeText(value, fallback = '') {
+  return sanitizeText(value, { maxLength: 300, fallback });
+}
+
 function detectGame(text, subreddit) {
+  const normalizedText = normalizeText(text, '');
   for (const [game, pattern] of Object.entries(GAME_PATTERNS)) {
-    if (pattern.test(text)) return game;
+    if (pattern.test(normalizedText)) return game;
   }
-  return SUBREDDIT_GAME_DEFAULTS[subreddit.toLowerCase()] || 'BL4';
+  return SUBREDDIT_GAME_DEFAULTS[normalizeText(subreddit, '').toLowerCase()] || 'BL4';
 }
 
 function detectRewardType(text) {
+  const normalizedText = normalizeText(text, '');
   for (const [type, pattern] of Object.entries(REWARD_PATTERNS)) {
-    if (pattern.test(text)) return type;
+    if (pattern.test(normalizedText)) return type;
   }
   return 'golden-keys';
 }
 
 function extractKeyCount(text) {
-  const match = text.match(/(\d+)\s*(?:golden\s*)?key/i);
+  const normalizedText = normalizeText(text, '');
+  const match = normalizedText.match(/(\d+)\s*(?:golden\s*)?key/i);
   return match ? parseInt(match[1], 10) : 1;
 }
 
 function extractRewardLabel(text) {
-  const keyMatch = text.match(/(\d+)\s*(golden|skeleton|diamond)?\s*keys?/i);
+  const normalizedText = normalizeText(text, '');
+  const keyMatch = normalizedText.match(/(\d+)\s*(golden|skeleton|diamond)?\s*keys?/i);
   if (keyMatch) {
     const count = keyMatch[1];
     const type = keyMatch[2]?.toLowerCase() || 'golden';
     return `${count} ${type.charAt(0).toUpperCase() + type.slice(1)} Key${parseInt(count) > 1 ? 's' : ''}`;
   }
-  if (/skin|head|outfit/i.test(text)) return 'Cosmetic Reward';
-  if (/weapon|gun|legendary/i.test(text)) return 'Weapon Reward';
+  if (/skin|head|outfit/i.test(normalizedText)) return 'Cosmetic Reward';
+  if (/weapon|gun|legendary/i.test(normalizedText)) return 'Weapon Reward';
   return 'SHiFT Reward';
 }
 
 function parseExpiration(text) {
+  const normalizedText = normalizeText(text, '');
   const patterns = [
     /exp(?:ires?|iration)?[:\s]+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
     /exp(?:ires?)?[:\s]+([A-Z][a-z]+\.?\s+\d{1,2}(?:,?\s+\d{4})?)/i,
@@ -113,7 +124,7 @@ function parseExpiration(text) {
   const currentYear = new Date().getFullYear();
 
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = normalizedText.match(pattern);
     if (match) {
       try {
         const parsed = new Date(match[1]);
@@ -140,6 +151,7 @@ function parseExpiration(text) {
 
 /** Decode the HTML entities Reddit uses inside RSS <content> bodies. */
 function decodeEntities(str) {
+  if (typeof str !== 'string') return '';
   return str
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -267,8 +279,11 @@ async function fetchSubreddit(subreddit) {
  * Extract SHiFT codes from a single post.
  */
 function extractCodesFromPost(post, subreddit) {
-  const codes = [];
-  const combinedText = `${post.title} ${post.selftext || ''}`;
+  if (!post || typeof post !== 'object') return [];
+
+  const title = normalizeText(post.title, '');
+  const selftext = normalizeText(post.selftext, '');
+  const combinedText = `${title} ${selftext}`.trim();
   const matches = combinedText.match(SHIFT_CODE_REGEX) || [];
   const uniqueCodes = [...new Set(matches.map(c => c.toUpperCase()))];
 
@@ -278,18 +293,36 @@ function extractCodesFromPost(post, subreddit) {
   const expiresAt = parseExpiration(combinedText);
   const reward = extractRewardLabel(combinedText);
 
-  for (const code of uniqueCodes) {
-    codes.push({
+  const createdUtc = Number(post.created_utc);
+  const postDate = Number.isFinite(createdUtc) && createdUtc > 0
+    ? new Date(createdUtc * 1000).toISOString().split('T')[0]
+    : new Date().toISOString().split('T')[0];
+  const upvotes = Number.isFinite(Number(post.ups)) ? Number(post.ups) : 0;
+  const normalizedSubreddit = normalizeText(subreddit, 'unknown');
+  const today = new Date().toISOString().split('T')[0];
+  const codes = [];
+
+  for (const [index, code] of uniqueCodes.entries()) {
+    const codeEntry = {
+      id: `reddit-${normalizedSubreddit.toLowerCase()}-${code.slice(0, 5).toLowerCase()}-${index}`,
       code,
       game,
+      status: 'unknown',
       reward,
       rewardType,
       keys: rewardType.endsWith('-keys') ? keyCount : undefined,
       expiresAt,
-      postDate: new Date(post.created_utc * 1000).toISOString().split('T')[0],
-      upvotes: post.ups,
-      subreddit,
-    });
+      source: `r/${normalizedSubreddit}`,
+      addedAt: postDate,
+      lastVerifiedAt: today,
+      isUniversal: true,
+      postDate,
+      upvotes,
+      subreddit: normalizedSubreddit,
+    };
+
+    assertValidCodeShape(codeEntry);
+    codes.push(codeEntry);
   }
 
   return codes;

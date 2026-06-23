@@ -6,6 +6,8 @@ import {
   assertValidShiftCodesFile,
   escapeTsString,
   pruneExpiredCodes,
+  assertValidCodeShape,
+  sanitizeText,
 } from "../../scripts/lib/shift-codes-file.mjs";
 
 /**
@@ -80,6 +82,21 @@ describe("shift-codes-file helper", () => {
     expect(escapeTsString("a\\b")).toBe("a\\\\b");
     expect(escapeTsString("line1\nline2")).toBe("line1 line2");
     expect(escapeTsString(null)).toBe("");
+  });
+
+  it("rejects malformed code objects and sanitizes text input", () => {
+    expect(() => assertValidCodeShape({
+      id: 'bad-1',
+      code: 'NOT-A-CODE',
+      game: 'BL4',
+      status: 'active',
+      reward: 'reward',
+      rewardType: 'golden-keys',
+      source: 'test',
+      addedAt: '2026-06-01',
+    })).toThrow(/Invalid SHiFT code/i);
+
+    expect(sanitizeText("  hello\u0000world  ", { maxLength: 20 })).toBe("hello world");
   });
 });
 
