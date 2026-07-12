@@ -43,6 +43,7 @@ const GAME_PATTERNS = {
   BL2: /borderlands\s*2/i,
   TPS: /(pre-?sequel|tps|borderlands:\s*the\s*pre)/i,
   BL3: /borderlands\s*3/i,
+  BL4: /borderlands\s*4/i,
   WONDERLANDS: /(wonderlands|tiny\s*tina)/i,
 };
 
@@ -59,11 +60,12 @@ function normalizeText(value, fallback = '') {
 function detectGame(text) {
   const normalizedText = normalizeText(text, '');
   if (GAME_PATTERNS.WONDERLANDS.test(normalizedText)) return 'WONDERLANDS';
+  if (GAME_PATTERNS.BL4.test(normalizedText)) return 'BL4';
   if (GAME_PATTERNS.BL3.test(normalizedText)) return 'BL3';
   if (GAME_PATTERNS.TPS.test(normalizedText)) return 'TPS';
   if (GAME_PATTERNS.BL2.test(normalizedText)) return 'BL2';
   if (GAME_PATTERNS.BL1.test(normalizedText)) return 'BL1';
-  if (/borderlands/i.test(normalizedText)) return 'BL3'; // Default
+  if (/borderlands/i.test(normalizedText)) return 'BL4'; // Default to latest game
   return null;
 }
 

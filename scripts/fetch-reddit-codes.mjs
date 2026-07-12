@@ -129,10 +129,16 @@ function parseExpiration(text) {
       try {
         const parsed = new Date(match[1]);
         if (!isNaN(parsed.getTime())) {
-          if (parsed.getFullYear() < currentYear) {
+          // Only infer year if the matched string did NOT include one
+          const hasExplicitYear = /\d{4}|\/\d{2}$/.test(match[1]);
+          if (!hasExplicitYear) {
             parsed.setFullYear(currentYear);
             if (parsed < new Date()) parsed.setFullYear(currentYear + 1);
           }
+          // Reject dates more than 1 year in the future (likely misparse)
+          const oneYearAhead = new Date();
+          oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
+          if (parsed > oneYearAhead) return null;
           return parsed.toISOString().split('T')[0];
         }
       } catch { /* continue */ }
@@ -173,7 +179,7 @@ async function fetchSubredditRSS(subreddit, sort = 'new', limit = 100) {
 
   let response;
   try {
-    response = await fetch(url, { headers: { ...COMMON_HEADERS, Accept: 'application/atom+xml, application/xml, text/xml, */*' } });
+    response = await fetch(url, { headers: { ...COMMON_HEADERS, Accept: 'application/atom+xml, application/xml, text/xml, */*' }, signal: AbortSignal.timeout(15000) });
   } catch (err) {
     console.warn(`  ⚠️  RSS /r/${subreddit}/${sort}: ${err.message}`);
     return { posts: [], reachable: false };
@@ -210,7 +216,7 @@ async function fetchSubredditPullPush(subreddit, size = 100) {
 
   let response;
   try {
-    response = await fetch(url, { headers: COMMON_HEADERS });
+    response = await fetch(url, { headers: COMMON_HEADERS, signal: AbortSignal.timeout(15000) });
   } catch (err) {
     console.warn(`  ⚠️  PullPush r/${subreddit}: ${err.message}`);
     return { posts: [], reachable: false };

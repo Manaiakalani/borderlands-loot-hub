@@ -355,8 +355,8 @@ export function useShiftCodes() {
     await loadData(true);
   }, [loadData]);
 
-  // Memoize "today" to avoid creating new Date on every filter call
-  const today = useMemo(() => new Date(), []);
+  // Stable "today" reference — initialized once on mount, doesn't change
+  const [today] = useState(() => new Date());
 
   // Memoized check if code was added today
   const isNewToday = useCallback((code: ShiftCode): boolean => {
