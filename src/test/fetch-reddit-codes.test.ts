@@ -39,6 +39,40 @@ describe("fetch-reddit-codes parsing", () => {
     expect(parsed).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
+  it("parses MM/DD without year as current or next year", () => {
+    const currentYear = new Date().getFullYear();
+    const result = parseExpiration("expires 12/31");
+    // Should be current or next year, month 12, day 31
+    expect(result).toMatch(/^\d{4}-12-31$/);
+    const year = parseInt(result.split('-')[0], 10);
+    expect(year).toBeGreaterThanOrEqual(currentYear);
+    expect(year).toBeLessThanOrEqual(currentYear + 1);
+  });
+
+  it("parses MM/DD/YYYY with explicit year correctly", () => {
+    const result = parseExpiration("expires 12/31/2026");
+    expect(result).toBe("2026-12-31");
+  });
+
+  it("rejects dates more than 1 year in the future", () => {
+    const farFuture = new Date();
+    farFuture.setFullYear(farFuture.getFullYear() + 2);
+    const m = farFuture.getMonth() + 1;
+    const d = farFuture.getDate();
+    const y = farFuture.getFullYear();
+    const result = parseExpiration(`expires ${m}/${d}/${y}`);
+    expect(result).toBeNull();
+  });
+
+  it("parses 'until MM/DD' format", () => {
+    const currentYear = new Date().getFullYear();
+    const result = parseExpiration("until 7/31");
+    expect(result).toMatch(/^\d{4}-07-31$/);
+    const year = parseInt(result.split('-')[0], 10);
+    expect(year).toBeGreaterThanOrEqual(currentYear);
+    expect(year).toBeLessThanOrEqual(currentYear + 1);
+  });
+
   it("extracts a SHiFT code from a post with the detected game", () => {
     const post = {
       title: "BL4",

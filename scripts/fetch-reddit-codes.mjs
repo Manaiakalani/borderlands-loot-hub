@@ -127,20 +127,34 @@ function parseExpiration(text) {
     const match = normalizedText.match(pattern);
     if (match) {
       try {
-        const parsed = new Date(match[1]);
-        if (!isNaN(parsed.getTime())) {
-          // Only infer year if the matched string did NOT include one
-          const hasExplicitYear = /\d{4}|\/\d{2}$/.test(match[1]);
-          if (!hasExplicitYear) {
-            parsed.setFullYear(currentYear);
-            if (parsed < new Date()) parsed.setFullYear(currentYear + 1);
-          }
-          // Reject dates more than 1 year in the future (likely misparse)
-          const oneYearAhead = new Date();
-          oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
-          if (parsed > oneYearAhead) return null;
-          return parsed.toISOString().split('T')[0];
+        const raw = match[1];
+        // Determine if year is explicit: need 3 slash-separated parts (MM/DD/YY or
+        // MM/DD/YYYY) or a 4-digit number in text-format dates ("Jan 5, 2026").
+        // MM/DD alone (2 parts) has NO year — must infer current/next.
+        const slashParts = raw.split('/');
+        const hasExplicitYear = slashParts.length >= 3 || /\d{4}/.test(raw);
+
+        let parsed;
+        if (!hasExplicitYear && slashParts.length === 2) {
+          // MM/DD without year — construct manually to avoid Date misinterpreting
+          const month = parseInt(slashParts[0], 10) - 1;
+          const day = parseInt(slashParts[1], 10);
+          if (month < 0 || month > 11 || day < 1 || day > 31) continue;
+          parsed = new Date(currentYear, month, day);
+          if (parsed < new Date()) parsed.setFullYear(currentYear + 1);
+        } else {
+          parsed = new Date(raw);
+          if (isNaN(parsed.getTime())) continue;
         }
+
+        if (isNaN(parsed.getTime())) continue;
+
+        // Reject dates more than 1 year in the future (likely misparse)
+        const oneYearAhead = new Date();
+        oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
+        if (parsed > oneYearAhead) return null;
+
+        return parsed.toISOString().split('T')[0];
       } catch { /* continue */ }
     }
   }
