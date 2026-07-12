@@ -27,11 +27,8 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('react-dom') || id.includes('react-router-dom') || id.includes('node_modules/react/')) {
             return 'react-vendor';
           }
-          if (id.includes('@radix-ui/react-tooltip') || id.includes('@radix-ui/react-toast')) {
+          if (id.includes('@radix-ui/react-tooltip')) {
             return 'ui-vendor';
-          }
-          if (id.includes('@tanstack/react-query')) {
-            return 'query-vendor';
           }
         },
       },
