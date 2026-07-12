@@ -27,3 +27,6 @@ dist-ssr
 mm-*.html
 game8.html
 
+
+# TypeScript build info
+*.tsbuildinfo
