@@ -41,10 +41,20 @@ const REWARD_TYPE_LABELS: Record<RewardType, string> = {
 };
 
 /**
+ * Parses a date string for display, treating date-only (YYYY-MM-DD) as local time.
+ */
+const parseDisplayDate = (dateString: string): Date => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return new Date(dateString + 'T00:00:00');
+  }
+  return new Date(dateString);
+};
+
+/**
  * Formats a date string for display
  */
 const formatDate = (dateString: string): string => {
-  const date = new Date(dateString);
+  const date = parseDisplayDate(dateString);
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -56,7 +66,7 @@ const formatDate = (dateString: string): string => {
  * Gets a relative time description (e.g., "2 days ago", "in 3 days")
  */
 const getRelativeTime = (dateString: string): string => {
-  const date = new Date(dateString);
+  const date = parseDisplayDate(dateString);
   const now = new Date();
   const diffMs = date.getTime() - now.getTime();
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
@@ -73,7 +83,7 @@ const getRelativeTime = (dateString: string): string => {
  */
 const isExpiringSoon = (expiresAt: string | null | undefined): boolean => {
   if (!expiresAt) return false;
-  const date = new Date(expiresAt);
+  const date = parseDisplayDate(expiresAt);
   const now = new Date();
   const diffMs = date.getTime() - now.getTime();
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
@@ -306,7 +316,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
                 rel="noopener noreferrer"
                 aria-label={`Redeem code for ${code.reward}`}
                 onClick={handleRedeem}
-                onMouseDown={handleRedeemMiddleClick}
+                onAuxClick={handleRedeemMiddleClick}
               >
                 Redeem
                 <ExternalLink className="w-4 h-4 ml-1" aria-hidden="true" />
