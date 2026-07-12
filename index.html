@@ -126,5 +126,19 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Restore SPA route from GitHub Pages 404 redirect
+      (function () {
+        var redirect = sessionStorage.getItem('redirect');
+        if (redirect) {
+          sessionStorage.removeItem('redirect');
+          var base = '/borderlands-loot-hub';
+          var route = redirect.startsWith(base) ? redirect.slice(base.length) : redirect;
+          if (route && route !== '/' && route !== '') {
+            window.history.replaceState(null, '', base + route);
+          }
+        }
+      })();
+    </script>
   </body>
 </html>

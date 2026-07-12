@@ -355,8 +355,20 @@ export function useShiftCodes() {
     await loadData(true);
   }, [loadData]);
 
-  // Stable "today" reference — initialized once on mount, doesn't change
-  const [today] = useState(() => new Date());
+  // "Today" state that auto-updates at local midnight
+  const [today, setToday] = useState(() => new Date());
+
+  useEffect(() => {
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const msUntilMidnight = tomorrow.getTime() - now.getTime();
+
+    const timerId = setTimeout(() => {
+      setToday(new Date());
+    }, msUntilMidnight + 100); // +100ms buffer past midnight
+
+    return () => clearTimeout(timerId);
+  }, [today]);
 
   // Memoized check if code was added today
   const isNewToday = useCallback((code: ShiftCode): boolean => {

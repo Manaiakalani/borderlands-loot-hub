@@ -38,7 +38,11 @@ jobs:
         run: node scripts/fetch-reddit-codes.mjs
 
       - name: Validate build
-        run: npm run build
+        run: |
+          npx tsc -b --noEmit
+          npm run lint
+          npm test
+          npm run build
 
       - name: Check for changes
         id: git-check
