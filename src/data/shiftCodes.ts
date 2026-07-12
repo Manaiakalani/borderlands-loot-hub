@@ -26,7 +26,11 @@ export interface ShiftCode {
 export const isCodeExpired = (code: ShiftCode): boolean => {
   if (code.status === 'expired') return true;
   if (!code.expiresAt) return false;
-  return new Date(code.expiresAt) < new Date();
+  // Parse date-only strings as local time to avoid UTC off-by-one
+  const expiresDate = /^\d{4}-\d{2}-\d{2}$/.test(code.expiresAt)
+    ? new Date(code.expiresAt + 'T23:59:59')
+    : new Date(code.expiresAt);
+  return expiresDate < new Date();
 };
 
 /**

@@ -11,7 +11,7 @@ const sanitizeCacheText = (value: unknown, fallback = ''): string => {
   if (typeof value !== 'string') return fallback;
 
   const cleaned = Array.from(value).map((char) => {
-    const codePoint = char.charCodeAt(0);
+    const codePoint = char.codePointAt(0) ?? 0;
     return codePoint >= 0x20 && codePoint !== 0x7f ? char : ' ';
   }).join('').replace(/\s+/g, ' ').trim();
 
@@ -73,6 +73,17 @@ interface FetchResult {
   codes: ShiftCode[];
   source: 'local' | 'remote';
 }
+
+/**
+ * Parses a date-only string (YYYY-MM-DD) as local time, not UTC.
+ * Prevents off-by-one day errors in negative UTC offsets (e.g. US Pacific).
+ */
+const parseLocalDate = (dateStr: string): Date => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date(dateStr + 'T00:00:00');
+  }
+  return new Date(dateStr);
+};
 
 /**
  * Checks if a date is today
@@ -349,14 +360,14 @@ export function useShiftCodes() {
 
   // Memoized check if code was added today
   const isNewToday = useCallback((code: ShiftCode): boolean => {
-    return isSameDay(new Date(code.addedAt), today);
+    return isSameDay(parseLocalDate(code.addedAt), today);
   }, [today]);
 
   // Memoized check if code was added recently (within N days)
   const isRecent = useCallback((code: ShiftCode): boolean => {
     const threshold = new Date(today);
     threshold.setDate(threshold.getDate() - RECENT_DAYS_THRESHOLD);
-    return new Date(code.addedAt) >= threshold;
+    return parseLocalDate(code.addedAt) >= threshold;
   }, [today]);
 
   const newTodayCodes = useMemo(() => 

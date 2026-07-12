@@ -120,6 +120,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
 
   const handleRedeemMiddleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     if (e.button === 1) {
+      e.preventDefault();
       navigator.clipboard.writeText(code.code).catch(() => {});
       toast.success('Code copied! Opening SHiFT in new tab', {
         description: `${code.code} — use Ctrl+V to paste`,

@@ -12,8 +12,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application with root base path for Docker/nginx
+RUN VITE_BASE_PATH=/ npm run build
 
 # Production stage
 FROM nginx:alpine AS production

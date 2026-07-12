@@ -39,6 +39,17 @@ const Index = () => {
   // Determine if we show the "New Today" section
   const showNewTodaySection = selectedGame === 'ALL' && selectedStatus === 'ALL' && newTodayCodes.length > 0;
 
+  // Pre-parse addedAt dates once for sort performance
+  const dateCache = useMemo(() => {
+    const cache = new Map<string, number>();
+    for (const code of codes) {
+      if (!cache.has(code.id)) {
+        cache.set(code.id, new Date(code.addedAt + 'T00:00:00').getTime());
+      }
+    }
+    return cache;
+  }, [codes]);
+
   // Filter and sort codes based on selection
   const filteredCodes = useMemo(() => {
     return codes.filter((code) => {
@@ -51,9 +62,9 @@ const Index = () => {
       // Sort by status (active first) then by date (newest first)
       const statusDiff = STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status];
       if (statusDiff !== 0) return statusDiff;
-      return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
+      return (dateCache.get(b.id) ?? 0) - (dateCache.get(a.id) ?? 0);
     });
-  }, [codes, selectedGame, selectedStatus, showNewTodaySection, isNewToday]);
+  }, [codes, selectedGame, selectedStatus, showNewTodaySection, isNewToday, dateCache]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);

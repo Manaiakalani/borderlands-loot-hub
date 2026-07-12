@@ -39,9 +39,7 @@ CHANGELOG.md
 **/*.spec.tsx
 coverage/
 
-# Development files
+# Development files (keep tsconfig/vite configs - needed for build)
 .eslintrc*
 .prettierrc*
-tsconfig*.json
-vite.config.ts
 vitest.config.ts
