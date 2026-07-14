@@ -373,7 +373,7 @@ function readExistingCodes() {
 function generateCodeEntry(code, index) {
   const id = `reddit-${code.game.toLowerCase()}-${code.code.substring(0, 5).toLowerCase()}-${index}`;
   const status = code.expiresAt && new Date(code.expiresAt) < new Date() ? 'expired' : 'unknown';
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatLocalDate(new Date());
 
   return `  {
     id: '${id}',
@@ -386,13 +386,13 @@ function generateCodeEntry(code, index) {
     addedAt: '${code.postDate}',
     lastVerifiedAt: '${today}',
     expiresAt: ${code.expiresAt ? `'${code.expiresAt}'` : 'null'},
-    isUniversal: true,
+    isUniversal: ${code.isUniversal ? 'true' : 'false'},
   },`;
 }
 
 function writeNewCodes(fileContent, newCodes) {
   const entries = newCodes.map((c, i) => generateCodeEntry(c, i)).join('\n');
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatLocalDate(new Date());
   const sectionHeader = `  // ============================================\n  // REDDIT - Auto-fetched Codes (${today})\n  // ============================================\n${entries}`;
 
   // insertEntriesAfterAnchor validates the result before we write, so a bad
