@@ -7,6 +7,14 @@ const VALID_GAMES = new Set<GameType>(['BL1', 'BL2', 'TPS', 'BL3', 'BL4', 'WONDE
 const VALID_STATUSES = new Set<CodeStatus>(['active', 'expired', 'unknown']);
 const VALID_REWARD_TYPES = new Set<RewardType>(['golden-keys', 'skeleton-keys', 'diamond-keys', 'skin', 'cosmetic', 'weapon', 'other']);
 
+/** Simple hash of embedded data length + first/last IDs to detect new deployments */
+const EMBEDDED_REVISION = `${mockShiftCodes.length}-${mockShiftCodes[0]?.id ?? ''}-${mockShiftCodes[mockShiftCodes.length - 1]?.id ?? ''}`;
+
+/** Safe localStorage helper — graceful no-op when storage is unavailable */
+const safeRemoveItem = (key: string): void => {
+  try { localStorage.removeItem(key); } catch { /* private browsing or quota */ }
+};
+
 const sanitizeCacheText = (value: unknown, fallback = ''): string => {
   if (typeof value !== 'string') return fallback;
 
@@ -48,10 +56,12 @@ const normalizeCodes = (codes: unknown): ShiftCode[] => {
     if (typeof candidate.keys === 'number' && Number.isInteger(candidate.keys)) {
       normalized.keys = candidate.keys;
     }
-    if (typeof candidate.expiresAt === 'string' || candidate.expiresAt === null) {
+    if (typeof candidate.expiresAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(candidate.expiresAt)) {
       normalized.expiresAt = candidate.expiresAt;
+    } else if (candidate.expiresAt === null) {
+      normalized.expiresAt = null;
     }
-    if (typeof candidate.lastVerifiedAt === 'string' || candidate.lastVerifiedAt === null) {
+    if (typeof candidate.lastVerifiedAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(candidate.lastVerifiedAt)) {
       normalized.lastVerifiedAt = candidate.lastVerifiedAt;
     }
     if (typeof candidate.isUniversal === 'boolean') {
@@ -104,19 +114,25 @@ const getCachedData = (): CacheData | null => {
     
     const parsed = JSON.parse(cached);
     if (!parsed || typeof parsed !== 'object') {
-      localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+      safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
       return null;
     }
 
     const cacheData = parsed as Partial<CacheData> & Record<string, unknown>;
     if (typeof cacheData.version !== 'number' || typeof cacheData.timestamp !== 'number' || typeof cacheData.source !== 'string') {
-      localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+      safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
       return null;
     }
 
     // Invalidate cache if data version changed
     if (cacheData.version !== DATA_VERSION) {
-      localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+      safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
+      return null;
+    }
+
+    // Invalidate cache if embedded data changed (new deployment with fresh codes)
+    if (typeof cacheData.embeddedRevision === 'string' && cacheData.embeddedRevision !== EMBEDDED_REVISION) {
+      safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
       return null;
     }
     
@@ -129,7 +145,7 @@ const getCachedData = (): CacheData | null => {
 
     const normalizedCodes = normalizeCodes(cacheData.codes);
     if (normalizedCodes.length === 0 && Array.isArray(cacheData.codes) && cacheData.codes.length > 0) {
-      localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+      safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
       return null;
     }
     
@@ -140,7 +156,7 @@ const getCachedData = (): CacheData | null => {
       source: cacheData.source === 'remote' ? 'remote' : 'local',
     };
   } catch (e) {
-    localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+    safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
     return null;
   }
 };
@@ -149,14 +165,17 @@ const getCachedData = (): CacheData | null => {
  * Saves data to localStorage cache with version info
  */
 const setCacheData = (codes: ShiftCode[], source: 'local' | 'remote'): void => {
-  const cacheData: CacheData = {
-    codes: normalizeCodes(codes),
-    timestamp: Date.now(),
-    version: DATA_VERSION,
-    source,
-  };
-  localStorage.setItem(STORAGE_KEYS.CODES_CACHE, JSON.stringify(cacheData));
-  localStorage.setItem(STORAGE_KEYS.LAST_FETCH_ATTEMPT, Date.now().toString());
+  try {
+    const cacheData = {
+      codes: normalizeCodes(codes),
+      timestamp: Date.now(),
+      version: DATA_VERSION,
+      source,
+      embeddedRevision: EMBEDDED_REVISION,
+    };
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, JSON.stringify(cacheData));
+    localStorage.setItem(STORAGE_KEYS.LAST_FETCH_ATTEMPT, Date.now().toString());
+  } catch { /* private browsing, quota exceeded — continue without caching */ }
 };
 
 /**
@@ -351,7 +370,7 @@ export function useShiftCodes() {
    * Force refresh - clears cache and fetches fresh data
    */
   const refresh = useCallback(async () => {
-    localStorage.removeItem(STORAGE_KEYS.CODES_CACHE);
+    safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
     await loadData(true);
   }, [loadData]);
 

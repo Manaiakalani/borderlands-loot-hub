@@ -107,7 +107,7 @@ const Privacy = memo(() => {
             </h2>
             <p className="text-slate-300 leading-relaxed">
               We do not use cookies for tracking or advertising. We do not use any third-party 
-              analytics services (like Google Analytics). We do not track your behavior across 
+              analytics services. We do not track your behavior across 
               websites. The only client-side storage we use is localStorage for caching code data 
               to improve your experience.
             </p>

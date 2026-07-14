@@ -113,7 +113,7 @@ function extractRewardLabel(text) {
   return 'SHiFT Reward';
 }
 
-function parseExpiration(text) {
+function parseExpiration(text, postDateObj = new Date()) {
   const normalizedText = normalizeText(text, '');
   const patterns = [
     /exp(?:ires?|iration)?[:\s]+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
@@ -121,27 +121,28 @@ function parseExpiration(text) {
     /until\s+(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/i,
   ];
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = postDateObj.getFullYear();
 
   for (const pattern of patterns) {
     const match = normalizedText.match(pattern);
     if (match) {
       try {
         const raw = match[1];
-        // Determine if year is explicit: need 3 slash-separated parts (MM/DD/YY or
-        // MM/DD/YYYY) or a 4-digit number in text-format dates ("Jan 5, 2026").
-        // MM/DD alone (2 parts) has NO year — must infer current/next.
         const slashParts = raw.split('/');
         const hasExplicitYear = slashParts.length >= 3 || /\d{4}/.test(raw);
 
         let parsed;
         if (!hasExplicitYear && slashParts.length === 2) {
-          // MM/DD without year — construct manually to avoid Date misinterpreting
           const month = parseInt(slashParts[0], 10) - 1;
           const day = parseInt(slashParts[1], 10);
           if (month < 0 || month > 11 || day < 1 || day > 31) continue;
           parsed = new Date(currentYear, month, day);
-          if (parsed < new Date()) parsed.setFullYear(currentYear + 1);
+          // Only bump year if the date is more than 60 days before the post
+          // (likely refers to next year, e.g. Dec post with Jan expiry)
+          const diffMs = postDateObj.getTime() - parsed.getTime();
+          if (diffMs > 60 * 24 * 60 * 60 * 1000) {
+            parsed.setFullYear(currentYear + 1);
+          }
         } else {
           parsed = new Date(raw);
           if (isNaN(parsed.getTime())) continue;
@@ -150,15 +151,27 @@ function parseExpiration(text) {
         if (isNaN(parsed.getTime())) continue;
 
         // Reject dates more than 1 year in the future (likely misparse)
-        const oneYearAhead = new Date();
+        const oneYearAhead = new Date(postDateObj);
         oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
         if (parsed > oneYearAhead) return null;
 
-        return parsed.toISOString().split('T')[0];
+        // Format as YYYY-MM-DD using local date parts (not UTC)
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, '0');
+        const d = String(parsed.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
       } catch { /* continue */ }
     }
   }
   return null;
+}
+
+/** Format a Date as YYYY-MM-DD using local date parts (avoids UTC off-by-one) */
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 // ── Reddit fetching (no-auth sources) ──────────────────────────────
@@ -307,19 +320,21 @@ function extractCodesFromPost(post, subreddit) {
   const matches = combinedText.match(SHIFT_CODE_REGEX) || [];
   const uniqueCodes = [...new Set(matches.map(c => c.toUpperCase()))];
 
+  const createdUtc = Number(post.created_utc);
+  const postDateObj = Number.isFinite(createdUtc) && createdUtc > 0
+    ? new Date(createdUtc * 1000)
+    : new Date();
+
   const game = detectGame(combinedText, subreddit);
   const rewardType = detectRewardType(combinedText);
   const keyCount = extractKeyCount(combinedText);
-  const expiresAt = parseExpiration(combinedText);
+  const expiresAt = parseExpiration(combinedText, postDateObj);
   const reward = extractRewardLabel(combinedText);
 
-  const createdUtc = Number(post.created_utc);
-  const postDate = Number.isFinite(createdUtc) && createdUtc > 0
-    ? new Date(createdUtc * 1000).toISOString().split('T')[0]
-    : new Date().toISOString().split('T')[0];
+  const postDate = formatLocalDate(postDateObj);
   const upvotes = Number.isFinite(Number(post.ups)) ? Number(post.ups) : 0;
   const normalizedSubreddit = normalizeText(subreddit, 'unknown');
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatLocalDate(new Date());
   const codes = [];
 
   for (const [index, code] of uniqueCodes.entries()) {
@@ -335,7 +350,7 @@ function extractCodesFromPost(post, subreddit) {
       source: `r/${normalizedSubreddit}`,
       addedAt: postDate,
       lastVerifiedAt: today,
-      isUniversal: true,
+      isUniversal: /universal|all\s*games|every\s*game/i.test(combinedText),
       postDate,
       upvotes,
       subreddit: normalizedSubreddit,

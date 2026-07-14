@@ -30,3 +30,7 @@ game8.html
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Playwright/Puppeteer test artifacts
+test-results/
+playwright-report/

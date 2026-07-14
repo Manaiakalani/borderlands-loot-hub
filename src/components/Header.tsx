@@ -85,9 +85,13 @@ export const Header = memo(function Header({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="px-2 py-1 rounded-full bg-warning/10 border border-warning/30 text-warning animate-pulse">
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-full bg-warning/10 border border-warning/30 text-warning animate-pulse"
+                      aria-label="Data may be outdated. Click refresh to update."
+                    >
                       <AlertTriangle className="w-4 h-4" />
-                    </div>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>Data may be outdated. Click refresh to update.</p>

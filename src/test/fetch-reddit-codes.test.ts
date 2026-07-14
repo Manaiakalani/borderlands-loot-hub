@@ -77,13 +77,14 @@ describe("fetch-reddit-codes parsing", () => {
     const post = {
       title: "BL4",
       selftext: "Code: ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ — 3 golden keys",
-      created_utc: Math.floor(new Date("2026-06-01T00:00:00Z").getTime() / 1000),
+      created_utc: Math.floor(new Date("2026-06-01T12:00:00Z").getTime() / 1000),
       ups: 42,
     };
     const codes = extractCodesFromPost(post, "Borderlands4");
     expect(codes).toHaveLength(1);
     expect(codes[0].code).toBe("ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ");
     expect(codes[0].game).toBe("BL4");
+    // Local date from UTC noon is June 1st in all reasonable timezones
     expect(codes[0].postDate).toBe("2026-06-01");
   });
 

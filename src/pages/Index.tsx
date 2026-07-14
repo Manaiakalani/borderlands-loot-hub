@@ -55,8 +55,8 @@ const Index = () => {
     return codes.filter((code) => {
       const gameMatch = selectedGame === 'ALL' || code.game === selectedGame;
       const statusMatch = selectedStatus === 'ALL' || code.status === selectedStatus;
-      // Exclude "new today" codes from main list when showing the special section
-      const notInNewSection = !showNewTodaySection || !isNewToday(code);
+      // Only exclude codes that actually appear in the New Today section (active + new today)
+      const notInNewSection = !showNewTodaySection || !(isNewToday(code) && code.status === 'active');
       return gameMatch && statusMatch && notInNewSection;
     }).sort((a, b) => {
       // Sort by status (active first) then by date (newest first)
@@ -127,7 +127,7 @@ const Index = () => {
         />
 
         {isLoading ? (
-          <div className="space-y-4 animate-fade-in">
+          <div className="space-y-4 animate-fade-in" role="status" aria-live="polite" aria-busy="true">
             <div className="flex items-center gap-2">
               <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
               <p className="text-muted-foreground">Loading SHiFT codes...</p>
@@ -135,7 +135,7 @@ const Index = () => {
             <SkeletonGrid count={6} />
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-8" role="region" aria-live="polite" aria-label="SHiFT codes results">
             {/* New Today Section */}
             {showNewTodaySection && (
               <NewTodaySection codes={newTodayCodes} />
