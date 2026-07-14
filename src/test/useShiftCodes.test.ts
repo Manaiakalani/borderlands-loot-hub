@@ -5,7 +5,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useShiftCodes } from '../hooks/useShiftCodes';
 import { STORAGE_KEYS, DATA_VERSION } from '../config/dataConfig';
+import { mockShiftCodes } from '../data/shiftCodes';
 import type { ShiftCode } from '../data/shiftCodes';
+
+// Must match the EMBEDDED_REVISION computation in useShiftCodes.ts
+const EMBEDDED_REVISION = `${mockShiftCodes.length}-${mockShiftCodes[0]?.id ?? ''}-${mockShiftCodes[mockShiftCodes.length - 1]?.id ?? ''}`;
 
 function makeCode(overrides: Partial<ShiftCode> = {}): ShiftCode {
   return {
@@ -21,12 +25,13 @@ function makeCode(overrides: Partial<ShiftCode> = {}): ShiftCode {
   };
 }
 
-function makeCacheData(codes: ShiftCode[], opts: { timestamp?: number; version?: number; source?: string } = {}) {
+function makeCacheData(codes: ShiftCode[], opts: { timestamp?: number; version?: number; source?: string; embeddedRevision?: string } = {}) {
   return JSON.stringify({
     codes,
     timestamp: opts.timestamp ?? Date.now(),
     version: opts.version ?? DATA_VERSION,
     source: opts.source ?? 'local',
+    embeddedRevision: opts.embeddedRevision ?? EMBEDDED_REVISION,
   });
 }
 
@@ -169,5 +174,37 @@ describe('useShiftCodes', () => {
 
     // After refresh, cache is cleared and falls through to embedded data
     expect(result.current.codes.length).toBeGreaterThan(1);
+  });
+
+  it('invalidates legacy cache without embeddedRevision', async () => {
+    const codes = [makeCode()];
+    const legacyCache = JSON.stringify({
+      codes,
+      timestamp: Date.now(),
+      version: DATA_VERSION,
+      source: 'local',
+      // no embeddedRevision field
+    });
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, legacyCache);
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    // Should fall through to embedded data since legacy cache is invalidated
+    expect(result.current.codes.length).toBeGreaterThan(1);
+  });
+
+  it('rejects codes with impossible calendar dates in expiresAt', async () => {
+    const badDateCode = makeCode({
+      id: 'bad-date',
+      expiresAt: '2026-99-99', // impossible date
+    });
+    const codes = [badDateCode];
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData(codes));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const found = result.current.codes.find(c => c.id === 'bad-date');
+    // expiresAt should be stripped (undefined) since it's an impossible date
+    expect(found?.expiresAt).toBeUndefined();
   });
 });

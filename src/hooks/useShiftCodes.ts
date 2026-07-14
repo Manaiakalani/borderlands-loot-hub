@@ -15,6 +15,14 @@ const safeRemoveItem = (key: string): void => {
   try { localStorage.removeItem(key); } catch { /* private browsing or quota */ }
 };
 
+/** Validates a YYYY-MM-DD string represents a real calendar date */
+const isValidDateString = (s: string): boolean => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+};
+
 const sanitizeCacheText = (value: unknown, fallback = ''): string => {
   if (typeof value !== 'string') return fallback;
 
@@ -56,12 +64,12 @@ const normalizeCodes = (codes: unknown): ShiftCode[] => {
     if (typeof candidate.keys === 'number' && Number.isInteger(candidate.keys)) {
       normalized.keys = candidate.keys;
     }
-    if (typeof candidate.expiresAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(candidate.expiresAt)) {
+    if (typeof candidate.expiresAt === 'string' && isValidDateString(candidate.expiresAt.slice(0, 10))) {
       normalized.expiresAt = candidate.expiresAt;
     } else if (candidate.expiresAt === null) {
       normalized.expiresAt = null;
     }
-    if (typeof candidate.lastVerifiedAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(candidate.lastVerifiedAt)) {
+    if (typeof candidate.lastVerifiedAt === 'string' && isValidDateString(candidate.lastVerifiedAt.slice(0, 10))) {
       normalized.lastVerifiedAt = candidate.lastVerifiedAt;
     }
     if (typeof candidate.isUniversal === 'boolean') {
@@ -130,8 +138,8 @@ const getCachedData = (): CacheData | null => {
       return null;
     }
 
-    // Invalidate cache if embedded data changed (new deployment with fresh codes)
-    if (typeof cacheData.embeddedRevision === 'string' && cacheData.embeddedRevision !== EMBEDDED_REVISION) {
+    // Invalidate cache if embedded data changed or revision is missing (legacy cache)
+    if (cacheData.embeddedRevision !== EMBEDDED_REVISION) {
       safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
       return null;
     }

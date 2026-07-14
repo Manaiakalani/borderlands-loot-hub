@@ -122,7 +122,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
   }, [code.code]);
 
   const handleRedeem = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    navigator.clipboard.writeText(code.code).then(() => {
+    navigator.clipboard?.writeText(code.code).then(() => {
       toast.success('Code copied! Paste it on the SHiFT site', {
         description: `${code.code} — use Ctrl+V to paste`,
       });
@@ -136,7 +136,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
   const handleRedeemMiddleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     if (e.button === 1) {
       e.preventDefault();
-      navigator.clipboard.writeText(code.code).catch(() => {});
+      navigator.clipboard?.writeText(code.code).catch(() => {});
       toast.success('Code copied! Opening SHiFT in new tab', {
         description: `${code.code} — use Ctrl+V to paste`,
       });
