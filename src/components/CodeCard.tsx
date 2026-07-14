@@ -109,6 +109,10 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
 
   const handleCopy = useCallback(async () => {
     try {
+      if (!navigator.clipboard?.writeText) {
+        toast.error('Clipboard not available — copy the code manually');
+        return;
+      }
       await navigator.clipboard.writeText(code.code);
       setCopied(true);
       toast.success('Code copied to clipboard!', {

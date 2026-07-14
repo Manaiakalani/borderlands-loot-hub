@@ -11,6 +11,7 @@ vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
+    info: vi.fn(),
   },
 }));
 
@@ -110,5 +111,20 @@ describe('CodeCard', () => {
     render(<CodeCard code={makeCode()} />);
     const copyBtn = screen.getByRole('button', { name: /copy code/i });
     expect(copyBtn).toBeTruthy();
+  });
+
+  it('does not throw when clipboard API is unavailable', async () => {
+    // Simulate restricted context where clipboard is undefined
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, writable: true, configurable: true });
+
+    render(<CodeCard code={makeCode()} />);
+    const copyBtn = screen.getByRole('button', { name: /copy/i });
+
+    // Should not throw
+    fireEvent.click(copyBtn);
+    const { toast } = await import('sonner');
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Clipboard not available — copy the code manually');
+    });
   });
 });
