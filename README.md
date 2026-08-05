@@ -28,7 +28,7 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 - 🖱️ **Middle-Click Redeem** - Middle mouse button opens Redeem in a new tab with code pre-filled
 - 🆕 **New Today Section** - Highlighted section for freshly added codes
 - ⚡ **Weekly Auto-Refresh** - Automatic data refresh with 7-day cache
-- 🐦 **Twitter Integration** - Pull codes from @Borderlands, @ShiftCodesTK, and more
+- 🐦 **Twitter Integration** - Pull codes from @Borderlands, @ShiftCodesTK, and more (manual runs only — see below)
 - 🤖 **Reddit Integration** - Daily auto-fetch from r/Borderlands4, r/Borderlands, r/borderlands3, r/Borderlandsshiftcodes
 - 🎨 **Borderlands Theme** - Custom dark theme with vault gold and orange accents
 - ♿ **Accessible** - ARIA labels and keyboard navigation support
@@ -49,13 +49,18 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 
 Codes are aggregated from multiple trusted sources:
 
-- **[MentalMars.com](https://mentalmars.com)** - Comprehensive SHiFT code database
-- **[Game8.co](https://game8.co/games/Borderlands-4/archives/548406)** - Borderlands 4 codes with expiration info
+- **[MentalMars.com](https://mentalmars.com)** - Comprehensive SHiFT code database (manual import)
+- **[Game8.co](https://game8.co/games/Borderlands-4/archives/548406)** - Borderlands 4 codes with expiration info (manual runs only; Cloudflare blocks GitHub Actions IPs)
 - **[r/Borderlandsshiftcodes](https://reddit.com/r/Borderlandsshiftcodes)** - Community-sourced codes from Reddit
 - **[r/Borderlands4](https://reddit.com/r/Borderlands4)** - Borderlands 4 community
 - **[r/Borderlands](https://reddit.com/r/Borderlands)** - Main Borderlands subreddit
 - **[r/borderlands3](https://reddit.com/r/borderlands3)** - Borderlands 3 community
-- **Twitter** - @Borderlands, @ShiftCodesTK, @DuvalMagic (via GitHub Actions)
+- **Twitter** - @Borderlands, @ShiftCodesTK, @DuvalMagic (manual runs only; the X API is no longer available)
+
+> **Only the Reddit scraper runs on a schedule.** Reddit is the sole source that
+> currently updates the site automatically. Codes are *discovered*, never
+> redemption-tested, so no entry claims to be "verified" — always confirm on the
+> official SHiFT site.
 
 ## 🚀 Getting Started
 
@@ -125,12 +130,16 @@ src/
 └── index.css           # Global styles & theme
 .github/
 └── workflows/
-    ├── fetch-twitter-codes.yml  # Daily Twitter fetch
-    └── fetch-reddit-codes.yml   # Daily Reddit fetch
+    ├── ci.yml                   # Typecheck, lint, tests, build, E2E (on PRs)
+    ├── deploy-pages.yml         # GitHub Pages deployment
+    ├── fetch-reddit-codes.yml   # Daily Reddit fetch (the only scheduled scraper)
+    ├── fetch-twitter-codes.yml  # Twitter fetch — manual dispatch only
+    └── fetch-game8-codes.yml    # Game8 fetch — manual dispatch only
 scripts/
 ├── fetch-twitter-codes.mjs      # Twitter fetch script
 ├── fetch-reddit-codes.mjs       # Reddit fetch script (4 subreddits)
-└── fetch-game8-codes.mjs        # Game8.co fetch script
+├── fetch-game8-codes.mjs        # Game8.co fetch script
+└── lib/shift-codes-file.mjs     # Shared validation + safe write helper
 ```
 
 ## 🎨 Tech Stack
@@ -155,15 +164,17 @@ scripts/
 
 ## 🔧 Configuration
 
-### Twitter Auto-Fetch (GitHub Actions)
+### Twitter Fetch (manual only)
 
-This project uses **GitHub Actions** to automatically fetch SHiFT codes from Twitter daily. No manual setup required after deploying!
+> **Disabled on a schedule.** X/Twitter API access is no longer available for this
+> workflow, so it runs only when dispatched manually from the Actions tab, and
+> only if a `TWITTER_BEARER_TOKEN` secret is present.
 
-**Setup:**
-1. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions**
+**Setup (only needed if you have API access):**
+1. Go to your GitHub repo -> **Settings** -> **Secrets and variables** -> **Actions**
 2. Click **New repository secret**
 3. Name: `TWITTER_BEARER_TOKEN`
-4. Value: Your Twitter API Bearer Token ([get one here](https://developer.twitter.com/))
+4. Value: Your Twitter API bearer token ([get one here](https://developer.twitter.com/))
 
 **Monitored Twitter Accounts:**
 - [@Borderlands](https://twitter.com/Borderlands) - Official Gearbox account
@@ -172,11 +183,18 @@ This project uses **GitHub Actions** to automatically fetch SHiFT codes from Twi
 - [@DuvalMagic](https://twitter.com/DuvalMagic) - Randy Pitchford (Gearbox CEO)
 
 **How it works:**
-- GitHub Actions runs daily at 8 AM UTC
+- Triggered manually from the Actions tab
 - Fetches tweets from monitored accounts
 - Extracts any SHiFT codes found
-- Automatically commits new codes to `src/data/shiftCodes.ts`
-- You can also trigger it manually from Actions tab
+- Validates, then commits new codes to `src/data/shiftCodes.ts`
+
+### Game8 Fetch (manual only)
+
+> **Disabled on a schedule since 2026-07.** Cloudflare began challenging GitHub
+> Actions IPs around 2026-06-17, so game8.co returns a challenge page instead of
+> the article and every scheduled run failed. There is no API to authenticate
+> with. Dispatch it manually to retry; the script exits non-zero if it is still
+> being challenged.
 
 ### Reddit Auto-Fetch (GitHub Actions)
 
@@ -194,6 +212,10 @@ SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys
 - Extracts SHiFT codes using regex pattern matching
 - Detects game type, reward, and expiration automatically
 - Deduplicates against existing codes and commits new ones to `src/data/shiftCodes.ts`
+- Caps how many codes one unattended run may add, and fails the run if the feeds
+  respond but nothing can be parsed or extracted (so a silent format change is
+  visible rather than looking like a quiet day)
+- Gates every commit behind `tsc`, `eslint`, the full test suite, and a build
 - You can also trigger it manually from Actions tab
 
 ### Data Refresh Settings

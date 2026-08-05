@@ -104,6 +104,15 @@ When adding new codes to `shiftCodes.ts`:
 3. Set `expiresAt` to `null` for indefinite codes, or ISO string for expiring codes
 4. Include `source` (e.g., 'mentalmars.com', 'twitter/@Borderlands')
 5. Increment `DATA_VERSION` in `dataConfig.ts` if changing data structure
+6. **Never add a "verified" claim.** `lastVerifiedAt` was removed in v6 — nothing
+   in this repo redeems a code, so any such field is an unsubstantiated claim.
+   `assertValidCodeShape` rejects it outright.
+
+`src/test/shiftCodesData.test.ts` runs integrity assertions against the committed
+dataset (unique ids, well-formed codes, plausible expiry window, no self-
+contradicting status). Keep those assertions **time-independent** — the scraper
+workflows run `npm test` before committing, so a clock-dependent assertion would
+eventually fail on its own and block automated updates.
 
 ### Cache Management
 
@@ -111,9 +120,14 @@ The app uses **versioned caching**:
 - Cache key: `shift_codes_cache` in localStorage
 - Version: `DATA_VERSION` constant in `dataConfig.ts`
 - **Increment `DATA_VERSION`** when making breaking changes to `ShiftCode` interface or data structure
+- Content revision: `computeEmbeddedRevision()` in `useShiftCodes.ts` is an FNV-1a
+  hash over the rendered fields, so *editing* an existing entry also invalidates
+  the cache. Don't reduce it to a length/id summary — corrections would then stay
+  invisible to returning visitors for the full 7-day window.
 
 Cache automatically invalidates when:
 - Data version changes (prevents type mismatches)
+- The embedded data content changes (any field that affects rendering)
 - 7 days have passed since last fetch
 - User manually refreshes
 
@@ -142,13 +156,22 @@ The `fetch-reddit-codes.yml` workflow:
   endpoint from GitHub Actions IPs, so it fetches via **Reddit RSS feeds** (`/.rss`,
   primary) with **PullPush.io** (third-party Reddit archive) as a fallback
 - Scrapes 4 subreddits: r/Borderlands4, r/Borderlands, r/borderlands3, r/Borderlandsshiftcodes
-- Exits 0 gracefully when every source is blocked (so it doesn't fail red daily); still commits codes whenever a source returns data
+- Fails **soft** (exit 0) when every source is unreachable, so it doesn't go red daily
+- Fails **hard** when the sources answer but nothing can be parsed or extracted —
+  see `assessRunHealth()`. A green run with zero output used to be indistinguishable
+  from a silently broken scraper.
+- Caps additions per run via `applyPerRunCap()`; these commits land on `main` unattended
 - Commits new codes directly to `shiftCodes.ts`
+
+The `fetch-game8-codes.yml` workflow:
+- Scheduled runs are **disabled** since 2026-07: Cloudflare challenges GitHub Actions
+  IPs, so game8.co returns a ~2KB challenge page instead of the article and every
+  scheduled run failed. Manual `workflow_dispatch` only.
 
 **Shared safety net:** all fetch scripts insert via `scripts/lib/shift-codes-file.mjs`,
 a validated helper that refuses to write malformed output. The workflows also run
-`npm run build` as a gate before committing, then dispatch `deploy-pages.yml` so new
-codes reach the live site.
+`npx tsc -b --noEmit`, `npm run lint`, `npm test` and `npm run build` as a gate before
+committing, then dispatch `deploy-pages.yml` so new codes reach the live site.
 
 **When debugging Twitter fetching**: Check `scripts/fetch-twitter-codes.mjs` (Node.js script, not browser code).
 **When debugging Reddit fetching**: Check `scripts/fetch-reddit-codes.mjs` (Node.js script using Reddit RSS feeds + PullPush.io, no auth).
@@ -176,6 +199,14 @@ describe('useShiftCodes', () => {
 3. **Increment `DATA_VERSION`** when changing ShiftCode interface structure
 4. **Use `isUniversal: true`** for codes that work across all games (but still create separate entries per game for filtering)
 5. **ESLint disables unused vars** - This is intentional for rapid prototyping, but clean up before committing
+6. **`src/data/shiftCodes.ts` is CRLF on disk but LF in the git blob.** Any script
+   that parses it must `.replace(/\r\n/g, "\n")` first, or it will silently match
+   nothing and report a false all-clear.
+7. **Every Tailwind colour must exist in `tailwind.config.ts`.** An undeclared name
+   emits no CSS at all and fails silently — `vault-gold` shipped that way across
+   ~44 utilities. `src/test/tailwind-colors.test.ts` now guards this.
+8. **Check contrast on alpha-modified text** (`text-<token>/70`), not just the
+   opaque token. `src/test/contrast.test.ts` composites and asserts both.
 
 ## Deployment
 
