@@ -45,26 +45,31 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      # One preview server serves both runners. Playwright is configured with
-      # reuseExistingServer, and the Puppeteer smoke script expects :4173.
-      - name: Start preview server
-        run: |
-          npm run preview &
-          for i in $(seq 1 60); do
-            if curl -sfo /dev/null http://localhost:4173/borderlands-loot-hub/; then
-              echo "Preview server is up."
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "Preview server did not start within 60s." >&2
-          exit 1
-
+      # Playwright starts and stops its own preview server (see playwright.config.ts).
       - name: End-to-end tests (Playwright)
         run: npx playwright test
 
+      # The Puppeteer script expects a server already on :4173, so start one here.
+      # Keeping the server and the test in a single step avoids relying on a
+      # backgrounded process surviving between steps, and redirecting its output
+      # stops the step from hanging on an open stdout pipe.
       - name: End-to-end smoke tests (Puppeteer)
-        run: npm run test:e2e:puppeteer
+        run: |
+          npm run preview > preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 60); do
+            if curl -sfo /dev/null http://localhost:4173/borderlands-loot-hub/; then
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -sfo /dev/null http://localhost:4173/borderlands-loot-hub/; then
+            echo "Preview server did not start within 60s." >&2
+            cat preview.log >&2
+            exit 1
+          fi
+          npm run test:e2e:puppeteer
 
       - name: Upload Playwright report on failure
         if: failure()

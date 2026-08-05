@@ -84,6 +84,53 @@ describe("shift-codes-file helper", () => {
     expect(escapeTsString(null)).toBe("");
   });
 
+  // Reddit post text is attacker-influenced and gets written verbatim into
+  // shiftCodes.ts, which is then compiled and shipped. Escaping is the only thing
+  // stopping a crafted post from injecting code, so assert the strong property:
+  // whatever comes out must stay INSIDE a single-quoted literal.
+  it("escapeTsString cannot break out of a single-quoted TS string literal", () => {
+    const hostileInputs = [
+      "'); process.exit(1); ('",
+      "\\' + require('fs').readFileSync('/etc/passwd') + \\'",
+      "a' , evil: 'x",
+      "back\\slash",
+      "trailing backslash \\",
+      "line\nbreak",
+      "carriage\r\nreturn",
+      "null\u0000byte",
+      "escape\u001b[31m",
+      "template ${process.env.SECRET}",
+      "backtick ` here",
+      "*/ } ] ; //",
+      "\u2028line separator",
+      "\u2029paragraph separator",
+    ];
+
+    for (const hostile of hostileInputs) {
+      const literal = `'${escapeTsString(hostile)}'`;
+
+      // It must parse as a plain string, not as an expression that does anything.
+      const parsed = (0, eval)(`(${literal})`);
+      expect(typeof parsed, `input: ${JSON.stringify(hostile)}`).toBe("string");
+
+      // No unescaped quote may survive, since that is what ends the literal.
+      const body = literal.slice(1, -1);
+      expect(body.replace(/\\\\/g, "").includes("\\'") || !body.includes("'")).toBe(true);
+
+      // Control characters and newlines must never reach the generated source.
+      // eslint-disable-next-line no-control-regex -- detecting control characters is the point of this assertion
+      expect(/[\u0000-\u001F\u007F\n\r]/.test(body), `input: ${JSON.stringify(hostile)}`).toBe(false);
+    }
+  });
+
+  it("escapeTsString escapes backslashes before quotes so the order cannot be exploited", () => {
+    // If quotes were escaped first, the added backslash would then be doubled and
+    // the quote would come loose. Encoding a literal backslash followed by a quote
+    // is the case that catches a wrong ordering.
+    const parsed = (0, eval)(`('${escapeTsString("\\'")}')`);
+    expect(parsed).toBe("\\'");
+  });
+
   it("rejects malformed code objects and sanitizes text input", () => {
     expect(() => assertValidCodeShape({
       id: 'bad-1',
