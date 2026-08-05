@@ -108,6 +108,11 @@
       }
     </script>
 
+    <!-- Restores the SPA route from the GitHub Pages 404 redirect.
+         Classic (non-deferred) script in <head> so it runs before the deferred
+         app module, ensuring React Router initialises with the final URL. -->
+    <script src="/restore-route.js"></script>
+
     <!-- Analytics -->
     <script
       src="https://analytics.manaiakalani.info/api/script.js"
@@ -119,19 +124,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // Restore SPA route from GitHub Pages 404 redirect
-      (function () {
-        var redirect = sessionStorage.getItem('redirect');
-        if (redirect) {
-          sessionStorage.removeItem('redirect');
-          var base = '/borderlands-loot-hub';
-          var route = redirect.startsWith(base) ? redirect.slice(base.length) : redirect;
-          if (route && route !== '/' && route !== '') {
-            window.history.replaceState(null, '', base + route);
-          }
-        }
-      })();
-    </script>
   </body>
 </html>

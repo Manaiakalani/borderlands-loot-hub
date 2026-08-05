@@ -74,8 +74,23 @@ const REWARD_PATTERNS = {
 
 // ── Helpers ────────────────────────────────────────────────────────
 
+// Post bodies are scanned for codes, so the window must be wide enough to reach
+// codes listed after a long preamble. 300 chars silently dropped them. Values
+// actually written to shiftCodes.ts are constructed labels, not raw post text,
+// and are separately bounded by assertValidCodeShape().
+const SCAN_MAX_LENGTH = 10000;
+const FIELD_MAX_LENGTH = 300;
+
+/** Upper bound on how many codes a single unattended run may commit. */
+const MAX_NEW_CODES_PER_RUN = 25;
+
 function normalizeText(value, fallback = '') {
-  return sanitizeText(value, { maxLength: 300, fallback });
+  return sanitizeText(value, { maxLength: SCAN_MAX_LENGTH, fallback });
+}
+
+/** Bounded normalizer for short values that end up in the generated file. */
+function normalizeField(value, fallback = '') {
+  return sanitizeText(value, { maxLength: FIELD_MAX_LENGTH, fallback });
 }
 
 function detectGame(text, subreddit) {
@@ -139,6 +154,16 @@ function parseExpiration(text, postDateObj = new Date()) {
           parsed = new Date(currentYear, month, day);
           // Only bump year if the date is more than 60 days before the post
           // (likely refers to next year, e.g. Dec post with Jan expiry)
+          const diffMs = postDateObj.getTime() - parsed.getTime();
+          if (diffMs > 60 * 24 * 60 * 60 * 1000) {
+            parsed.setFullYear(currentYear + 1);
+          }
+        } else if (!hasExplicitYear) {
+          // Month-name form without a year, e.g. "Dec 31". `new Date('Dec 31')`
+          // silently yields year 2001 in V8, which would expire the code instantly.
+          // Anchor to the post's year, then apply the same next-year bump rule.
+          parsed = new Date(`${raw} ${currentYear}`);
+          if (isNaN(parsed.getTime())) continue;
           const diffMs = postDateObj.getTime() - parsed.getTime();
           if (diffMs > 60 * 24 * 60 * 60 * 1000) {
             parsed.setFullYear(currentYear + 1);
@@ -333,8 +358,7 @@ function extractCodesFromPost(post, subreddit) {
 
   const postDate = formatLocalDate(postDateObj);
   const upvotes = Number.isFinite(Number(post.ups)) ? Number(post.ups) : 0;
-  const normalizedSubreddit = normalizeText(subreddit, 'unknown');
-  const today = formatLocalDate(new Date());
+  const normalizedSubreddit = normalizeField(subreddit, 'unknown');
   const codes = [];
 
   for (const [index, code] of uniqueCodes.entries()) {
@@ -349,7 +373,9 @@ function extractCodesFromPost(post, subreddit) {
       expiresAt,
       source: `r/${normalizedSubreddit}`,
       addedAt: postDate,
-      lastVerifiedAt: today,
+      // Deliberately not setting lastVerifiedAt: the scraper only *discovers*
+      // codes, it never confirms they redeem. Stamping it here made the UI show
+      // a green "Verified" badge for entirely unverified codes.
       isUniversal: /universal|all\s*games|every\s*game/i.test(combinedText),
       postDate,
       upvotes,
@@ -371,9 +397,18 @@ function readExistingCodes() {
 }
 
 function generateCodeEntry(code, index) {
-  const id = `reddit-${code.game.toLowerCase()}-${code.code.substring(0, 5).toLowerCase()}-${index}`;
-  const status = code.expiresAt && new Date(code.expiresAt) < new Date() ? 'expired' : 'unknown';
-  const today = formatLocalDate(new Date());
+  // Derive the ID from the full code (not a 5-char prefix + loop index), because the
+  // index resets every run — two different codes sharing a prefix would collide.
+  const slug = code.code.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  const id = `reddit-${code.game.toLowerCase()}-${slug}`;
+  // Match isCodeExpired() in src/data/shiftCodes.ts: a date-only deadline is
+  // valid through the end of that local day, not from its UTC midnight.
+  const expiryDate = code.expiresAt
+    ? (/^\d{4}-\d{2}-\d{2}$/.test(code.expiresAt)
+        ? new Date(`${code.expiresAt}T23:59:59`)
+        : new Date(code.expiresAt))
+    : null;
+  const status = expiryDate && expiryDate < new Date() ? 'expired' : 'unknown';
 
   return `  {
     id: '${id}',
@@ -384,7 +419,6 @@ function generateCodeEntry(code, index) {
     rewardType: '${code.rewardType}',${code.keys ? `\n    keys: ${code.keys},` : ''}
     source: 'r/${escapeTsString(code.subreddit)}',
     addedAt: '${code.postDate}',
-    lastVerifiedAt: '${today}',
     expiresAt: ${code.expiresAt ? `'${code.expiresAt}'` : 'null'},
     isUniversal: ${code.isUniversal ? 'true' : 'false'},
   },`;
@@ -418,7 +452,14 @@ async function main() {
       if (reachable) anyReachable = true;
 
       for (const post of posts) {
-        allCodes.push(...extractCodesFromPost(post, subreddit));
+        // Isolate per post: assertValidCodeShape() throws on implausible values
+        // (e.g. a post claiming "100 keys"). Without this, one bad post aborted
+        // every remaining post in the subreddit.
+        try {
+          allCodes.push(...extractCodesFromPost(post, subreddit));
+        } catch (error) {
+          console.warn(`  ⚠️  Skipping post ${post?.id ?? '<unknown>'}: ${error.message}`);
+        }
       }
 
       // Be polite to the upstream services between subreddits.
@@ -438,12 +479,15 @@ async function main() {
     return;
   }
 
-  // 2. Deduplicate codes globally (keep highest upvotes)
+  // 2. Deduplicate per (code, game) rather than per code alone. The same code is
+  //    frequently posted for multiple titles, and collapsing on code discarded
+  //    the per-game entries the UI filters on. Keep the most-upvoted sighting.
   const codeMap = new Map();
   for (const code of allCodes) {
-    const existing = codeMap.get(code.code);
+    const key = `${code.code}::${code.game}`;
+    const existing = codeMap.get(key);
     if (!existing || code.upvotes > existing.upvotes) {
-      codeMap.set(code.code, code);
+      codeMap.set(key, code);
     }
   }
   const uniqueCodes = Array.from(codeMap.values())
@@ -463,11 +507,24 @@ async function main() {
     return;
   }
 
-  // 4. Write new codes to shiftCodes.ts
-  writeNewCodes(fileContent, newCodes);
+  // Bound the blast radius of a spam or malformed feed. Reddit is an untrusted
+  // source and these commits land on main unattended, so cap what one run can
+  // add. An upvote threshold is not usable here: the RSS feeds always report 0.
+  let codesToAdd = newCodes;
+  if (codesToAdd.length > MAX_NEW_CODES_PER_RUN) {
+    console.warn(
+      `\n⚠️  ${codesToAdd.length} new codes exceeds the per-run cap of ` +
+        `${MAX_NEW_CODES_PER_RUN}; adding the ${MAX_NEW_CODES_PER_RUN} most recent ` +
+        'and leaving the rest for the next run.',
+    );
+    codesToAdd = codesToAdd.slice(0, MAX_NEW_CODES_PER_RUN);
+  }
 
-  console.log(`\n✅ Added ${newCodes.length} new codes to shiftCodes.ts:`);
-  for (const c of newCodes) {
+  // 4. Write new codes to shiftCodes.ts
+  writeNewCodes(fileContent, codesToAdd);
+
+  console.log(`\n✅ Added ${codesToAdd.length} new codes to shiftCodes.ts:`);
+  for (const c of codesToAdd) {
     console.log(`   + ${c.code} (${c.game}) — ${c.reward} [r/${c.subreddit}]`);
   }
 }

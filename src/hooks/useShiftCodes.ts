@@ -317,14 +317,26 @@ export function useShiftCodes() {
   }, [fetchCodes]);
 
   /**
-   * Checks if data is stale (older than threshold)
+   * Checks if the underlying code data is stale.
+   *
+   * This is deliberately derived from the newest `addedAt` in the data rather than
+   * from `lastFetched`. `lastFetched` is reset on every page load (and whenever the
+   * 7-day cache expires and reloads embedded data), so it can never reach the 14-day
+   * stale threshold — the warning would be dead code. What users actually care about
+   * is how long it has been since the code list itself was updated.
    */
   const checkStaleness = useCallback(() => {
-    if (!lastFetched) return;
-    
-    const age = Date.now() - lastFetched.getTime();
-    setIsStale(age > DATA_CONFIG.STALE_THRESHOLD_MS);
-  }, [lastFetched]);
+    if (codes.length === 0) return;
+
+    let newest = 0;
+    for (const code of codes) {
+      const t = parseLocalDate(code.addedAt).getTime();
+      if (!Number.isNaN(t) && t > newest) newest = t;
+    }
+
+    if (newest === 0) return;
+    setIsStale(Date.now() - newest > DATA_CONFIG.STALE_THRESHOLD_MS);
+  }, [codes]);
 
   /**
    * Background check for updates (runs periodically when app is open)
@@ -406,6 +418,9 @@ export function useShiftCodes() {
   const isRecent = useCallback((code: ShiftCode): boolean => {
     const threshold = new Date(today);
     threshold.setDate(threshold.getDate() - RECENT_DAYS_THRESHOLD);
+    // Normalize to start-of-day; otherwise the window is short by the current
+    // time-of-day and a code added exactly N days ago is wrongly excluded.
+    threshold.setHours(0, 0, 0, 0);
     return parseLocalDate(code.addedAt) >= threshold;
   }, [today]);
 
@@ -419,9 +434,16 @@ export function useShiftCodes() {
     [codes, isRecent, isNewToday]
   );
 
+  // `today` is an intentional dependency on these three memos. It is not read
+  // inside the callbacks, so ESLint flags it as unnecessary — but both
+  // getEffectiveStatus() and getTimeUntilRefresh() read the current clock.
+  // Depending on the midnight-ticking `today` state is what forces them to be
+  // re-evaluated when the date rolls over while the tab stays open. Without it a
+  // code that expires overnight keeps rendering as active.
   const activeCodes = useMemo(() => 
     codes.filter(c => getEffectiveStatus(c) === 'active').length,
-    [codes]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [codes, today]
   );
 
   // Process codes to apply auto-expiration logic
@@ -430,12 +452,14 @@ export function useShiftCodes() {
       ...code,
       status: getEffectiveStatus(code),
     })),
-    [codes]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [codes, today]
   );
 
   const nextRefreshIn = useMemo(() => 
     lastFetched ? getTimeUntilRefresh(lastFetched) : null,
-    [lastFetched]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lastFetched, today]
   );
 
   return {

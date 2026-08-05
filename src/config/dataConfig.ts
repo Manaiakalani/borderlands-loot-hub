@@ -6,24 +6,29 @@
  *    - Twitter codes are automatically added via GitHub Actions
  * 2. REMOTE: Fetches from a remote JSON endpoint
  * 
- * To enable remote fetching, set USE_REMOTE_DATA to true and provide DATA_SOURCE_URL.
+ * Remote fetching turns on automatically when VITE_DATA_SOURCE_URL is set at
+ * build time; leave it empty to use the embedded data.
  */
+
+/** Public JSON endpoint, injected at build time. Empty string means "use embedded data". */
+const REMOTE_DATA_SOURCE_URL = (import.meta.env?.VITE_DATA_SOURCE_URL ?? '').trim();
 
 export const DATA_CONFIG = {
   /**
-   * Whether to fetch data from a remote source
-   * Set to true when you have a hosted JSON endpoint
+   * Whether to fetch data from a remote source.
+   * Derived from VITE_DATA_SOURCE_URL so the documented setting can't silently
+   * do nothing.
    */
-  USE_REMOTE_DATA: false,
+  USE_REMOTE_DATA: REMOTE_DATA_SOURCE_URL.length > 0,
 
   /**
-   * Remote data source URL
+   * Remote data source URL, from VITE_DATA_SOURCE_URL.
    * Examples:
    * - GitHub raw: 'https://raw.githubusercontent.com/user/repo/main/data/shiftCodes.json'
    * - JSONBin: 'https://api.jsonbin.io/v3/b/<bin-id>/latest'
    * - Your own API: 'https://api.example.com/shift-codes'
    */
-  DATA_SOURCE_URL: '',
+  DATA_SOURCE_URL: REMOTE_DATA_SOURCE_URL,
 
   /**
    * Cache duration in milliseconds

@@ -3,7 +3,7 @@ import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles, Calendar,
 import { ShiftCode, GAME_INFO, CodeStatus, RewardType } from '@/data/shiftCodes';
 import { SHIFT_REDEEM_URL } from '@/config/dataConfig';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { cn, copyToClipboard } from '@/lib/utils';
 import { toast } from 'sonner';
 
 /** Status configuration for styling and icons */
@@ -108,41 +108,48 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
   }, []);
 
   const handleCopy = useCallback(async () => {
-    try {
-      if (!navigator.clipboard?.writeText) {
-        toast.error('Clipboard not available — copy the code manually');
-        return;
-      }
-      await navigator.clipboard.writeText(code.code);
-      setCopied(true);
-      toast.success('Code copied to clipboard!', {
-        description: 'Ready to redeem at shift.gearboxsoftware.com',
-      });
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast.error('Failed to copy code');
-    }
-  }, [code.code]);
-
-  const handleRedeem = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
-    navigator.clipboard?.writeText(code.code).then(() => {
-      toast.success('Code copied! Paste it on the SHiFT site', {
-        description: `${code.code} — use Ctrl+V to paste`,
-      });
-    }).catch(() => {
-      toast.info('Opening SHiFT site — paste the code manually', {
+    const ok = await copyToClipboard(code.code);
+    if (!ok) {
+      toast.error('Clipboard not available — copy the code manually', {
         description: code.code,
       });
+      return;
+    }
+    setCopied(true);
+    toast.success('Code copied to clipboard!', {
+      description: 'Ready to redeem at shift.gearboxsoftware.com',
+    });
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+  }, [code.code]);
+
+  const handleRedeem = useCallback(() => {
+    void copyToClipboard(code.code).then((ok) => {
+      if (ok) {
+        toast.success('Code copied! Paste it on the SHiFT site', {
+          description: `${code.code} — use Ctrl+V to paste`,
+        });
+      } else {
+        toast.info('Opening SHiFT site — paste the code manually', {
+          description: code.code,
+        });
+      }
     });
   }, [code.code]);
 
   const handleRedeemMiddleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     if (e.button === 1) {
       e.preventDefault();
-      navigator.clipboard?.writeText(code.code).catch(() => {});
-      toast.success('Code copied! Opening SHiFT in new tab', {
-        description: `${code.code} — use Ctrl+V to paste`,
+      void copyToClipboard(code.code).then((ok) => {
+        if (ok) {
+          toast.success('Code copied! Opening SHiFT in new tab', {
+            description: `${code.code} — use Ctrl+V to paste`,
+          });
+        } else {
+          toast.info('Opening SHiFT in new tab — paste the code manually', {
+            description: code.code,
+          });
+        }
       });
       window.open(SHIFT_REDEEM_URL, '_blank', 'noopener,noreferrer');
     }

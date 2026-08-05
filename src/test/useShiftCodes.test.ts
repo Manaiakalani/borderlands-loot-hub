@@ -207,4 +207,59 @@ describe('useShiftCodes', () => {
     // expiresAt should be stripped (undefined) since it's an impossible date
     expect(found?.expiresAt).toBeUndefined();
   });
+
+  // Regression: the recency window was computed from the current wall-clock time
+  // rather than start-of-day, so a code added exactly N days ago was excluded
+  // for all but the first instant of the day.
+  it('includes a code added exactly at the recency boundary, late in the day', async () => {
+    // Fix "now" to late evening so the un-normalised threshold would be 22:45.
+    const now = new Date(2026, 5, 15, 22, 45, 0);
+    vi.setSystemTime(now);
+
+    const boundary = new Date(2026, 5, 12); // exactly 3 days earlier (RECENT_DAYS_THRESHOLD)
+    const boundaryStr = `${boundary.getFullYear()}-${String(boundary.getMonth() + 1).padStart(2, '0')}-${String(boundary.getDate()).padStart(2, '0')}`;
+    const boundaryCode = makeCode({ id: 'boundary-code', addedAt: boundaryStr });
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.isRecent(boundaryCode)).toBe(true);
+
+    // One day beyond the window is still excluded.
+    const outside = makeCode({ id: 'outside-code', addedAt: '2026-06-11' });
+    expect(result.current.isRecent(outside)).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  // Regression: staleness was derived from `lastFetched`, which resets on every
+  // page load, so the stale warning could never fire.
+  it('flags stale data based on the newest code date, not load time', async () => {
+    const now = new Date(2026, 5, 15, 12, 0, 0);
+    vi.setSystemTime(now);
+
+    // Newest code is 30 days old — well past the 14-day stale threshold.
+    const staleCodes = [makeCode({ id: 'stale-1', addedAt: '2026-05-16' })];
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData(staleCodes));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.isStale).toBe(true));
+
+    vi.useRealTimers();
+  });
+
+  it('does not flag stale data when codes are recent', async () => {
+    const now = new Date(2026, 5, 15, 12, 0, 0);
+    vi.setSystemTime(now);
+
+    const freshCodes = [makeCode({ id: 'fresh-1', addedAt: '2026-06-14' })];
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData(freshCodes));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.isStale).toBe(false);
+
+    vi.useRealTimers();
+  });
 });

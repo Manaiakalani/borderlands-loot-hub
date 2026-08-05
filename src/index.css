@@ -24,7 +24,9 @@
     --secondary-foreground: 45 10% 85%;
 
     --muted: 220 10% 15%;
-    --muted-foreground: 220 10% 55%;
+    /* 62% keeps secondary text at >=5.4:1 on --muted, --card and --background.
+       55% measured 4.33:1 on --muted, failing WCAG 2.1 AA for normal text. */
+    --muted-foreground: 220 10% 62%;
 
     /* Orange accent for hover/active states */
     --accent: 25 95% 55%;
@@ -35,7 +37,9 @@
 
     /* Status colors */
     --success: 142 70% 45%;
-    --success-foreground: 142 70% 95%;
+    /* Dark ink on the green fill (6.6:1). The previous light-on-light pairing
+       measured 2.16:1, well below WCAG 2.1 AA. Mirrors --primary-foreground. */
+    --success-foreground: 142 70% 10%;
     
     --warning: 45 95% 55%;
     --warning-foreground: 220 15% 8%;

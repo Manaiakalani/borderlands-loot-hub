@@ -68,18 +68,46 @@ test.describe('Borderlands SHiFT Vault E2E', () => {
     await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
   });
 
-  test('no external analytics scripts loaded', async ({ page }) => {
-    const requests: string[] = [];
+  test('only expected third-party origins are contacted', async ({ page }) => {
+    // Analytics is intentionally enabled (see the Privacy page). This test guards
+    // against *unexpected* third parties creeping in, and pins the analytics host.
+    const ALLOWED_ORIGINS = [
+      'https://analytics.manaiakalani.info',
+      'https://fonts.googleapis.com',
+      'https://fonts.gstatic.com',
+    ];
+
+    const external: string[] = [];
     page.on('request', (req) => {
-      if (!req.url().startsWith('http://localhost')) {
-        requests.push(req.url());
+      const url = req.url();
+      if (!url.startsWith('http://localhost') && !url.startsWith('data:')) {
+        external.push(url);
       }
     });
     await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
 
-    // No third-party requests should exist
-    expect(requests.filter(u => u.includes('analytics'))).toHaveLength(0);
+    const unexpected = external.filter(
+      (u) => !ALLOWED_ORIGINS.some((origin) => u.startsWith(origin))
+    );
+    expect(unexpected, `Unexpected third-party requests: ${unexpected.join(', ')}`).toHaveLength(0);
+  });
+
+  test('route-restore script is external so a strict CSP can allow it', async ({ page }) => {
+    await page.goto(BASE_URL);
+    // The GH Pages deep-link restore must not be an inline <script>, otherwise a
+    // CSP without 'unsafe-inline' (see nginx.conf) would block it.
+    const inlineExecutable = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('script'))
+        .filter((s) => !s.src && (!s.type || s.type === 'text/javascript' || s.type === 'module'))
+        .map((s) => s.textContent?.slice(0, 40) ?? '')
+    );
+    expect(inlineExecutable).toHaveLength(0);
+
+    const hasRestoreScript = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('script')).some((s) => s.src.includes('restore-route.js'))
+    );
+    expect(hasRestoreScript).toBe(true);
   });
 
   test('responsive layout has no horizontal overflow at 390px', async ({ page }) => {

@@ -124,7 +124,10 @@ describe('CodeCard', () => {
     fireEvent.click(copyBtn);
     const { toast } = await import('sonner');
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('Clipboard not available — copy the code manually');
+      expect(toast.error).toHaveBeenCalledWith(
+        'Clipboard not available — copy the code manually',
+        expect.objectContaining({ description: expect.any(String) })
+      );
     });
   });
 });

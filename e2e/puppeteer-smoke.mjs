@@ -37,7 +37,18 @@ async function testDashboardLoads() {
   assert(activeText.includes('Total'), 'Shows Total stat');
 }
 
-async function testNoAnalytics() {
+// The site intentionally loads first-party analytics (restored in e1c4698) and
+// Google Fonts. Assert an origin allowlist instead of "no analytics": that still
+// catches an unexpected third-party tracker being introduced, without failing on
+// the origins we deliberately ship.
+// Keep this in sync with nginx.conf's CSP and the allowlist in e2e/app.spec.ts.
+const ALLOWED_THIRD_PARTY_ORIGINS = [
+  'https://analytics.manaiakalani.info',
+  'https://fonts.googleapis.com',
+  'https://fonts.gstatic.com',
+];
+
+async function testNoUnexpectedThirdParties() {
   const requests = [];
   page.on('request', req => {
     const url = req.url();
@@ -46,8 +57,13 @@ async function testNoAnalytics() {
     }
   });
   await page.goto(BASE, { waitUntil: 'networkidle0' });
-  const analytics = requests.filter(u => u.includes('analytics'));
-  assert(analytics.length === 0, 'No analytics requests');
+  const unexpected = requests.filter(
+    u => !ALLOWED_THIRD_PARTY_ORIGINS.some(origin => u.startsWith(origin))
+  );
+  if (unexpected.length > 0) {
+    console.error(`    unexpected origins: ${unexpected.join(', ')}`);
+  }
+  assert(unexpected.length === 0, 'Only allowlisted third-party origins contacted');
   page.removeAllListeners('request');
 }
 
@@ -96,7 +112,7 @@ async function main() {
   await setup();
   try {
     await testDashboardLoads();
-    await testNoAnalytics();
+    await testNoUnexpectedThirdParties();
     await testMobileNoOverflow();
     await testAboutRoute();
     await testPrivacyRoute();

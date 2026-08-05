@@ -1,6 +1,9 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 /** Strip shebang lines so Rolldown can parse CLI scripts imported by tests. */
 function stripShebang() {
@@ -23,6 +26,6 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: { "@": path.resolve(rootDir, "./src") },
   },
 });
