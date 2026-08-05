@@ -428,6 +428,12 @@ function extractCodesFromPost(post, subreddit) {
   const game = detectGame(combinedText, subreddit);
   const rewardType = detectRewardType(combinedText);
   const keyCount = extractKeyCount(combinedText);
+  // A post can advertise an implausible quantity ("Giveaway: 100 golden keys!")
+  // alongside a perfectly real code. assertValidCodeShape caps keys at 99, and
+  // letting that reject the whole entry silently discarded the code itself.
+  // Dropping just the unreliable count keeps the code, which is the valuable part.
+  const plausibleKeyCount =
+    Number.isInteger(keyCount) && keyCount >= 1 && keyCount <= 99 ? keyCount : undefined;
   const expiresAt = parseExpiration(combinedText, postDateObj);
   const reward = extractRewardLabel(combinedText);
 
@@ -444,7 +450,7 @@ function extractCodesFromPost(post, subreddit) {
       status: 'unknown',
       reward,
       rewardType,
-      keys: rewardType.endsWith('-keys') ? keyCount : undefined,
+      keys: rewardType.endsWith('-keys') ? plausibleKeyCount : undefined,
       expiresAt,
       source: `r/${normalizedSubreddit}`,
       addedAt: postDate,
@@ -575,6 +581,23 @@ function postHasCodeCandidate(post) {
 const MIN_POSTS_FOR_BREAKAGE_VERDICT = 5;
 
 /**
+ * Minimum code-shaped posts before "none of them extracted" is treated as breakage.
+ *
+ * A threshold rather than a moved counter is what keeps this guard both reachable
+ * and quiet: one rejected giveaway cannot trip it, but a genuine extraction
+ * regression produces many candidate posts and no codes at all.
+ */
+const MIN_CANDIDATES_FOR_BREAKAGE_VERDICT = 5;
+
+/**
+ * Share of posts that may fail extraction before the run is considered broken.
+ *
+ * In a healthy run only the rare malformed post throws, so the real rate sits
+ * near zero. Anything past half is a format change, not bad luck.
+ */
+const MAX_HEALTHY_SKIP_RATIO = 0.5;
+
+/**
  * Decide whether a completed run was healthy, benignly empty, or systemically broken.
  *
  * Pure and exported so the failure modes are unit-testable without any network.
@@ -621,12 +644,23 @@ function assessRunHealth(stats) {
     };
   }
 
-  if (postsWithCandidates > 0 && codesExtracted === 0) {
+  if (postsWithCandidates >= MIN_CANDIDATES_FOR_BREAKAGE_VERDICT && codesExtracted === 0) {
     return {
       level: 'error',
       message:
         `${postsWithCandidates} post(s) contained code-shaped text but zero codes were extracted. ` +
         'The extraction path is broken.',
+    };
+  }
+
+  // Partial rot: the run still produced something, but most posts failed. Without
+  // this, a degradation to 95% failure exits green and looks like a quiet day.
+  if (postsSeen >= MIN_POSTS_FOR_BREAKAGE_VERDICT && postsSkipped / postsSeen > MAX_HEALTHY_SKIP_RATIO) {
+    return {
+      level: 'error',
+      message:
+        `Extraction threw for ${postsSkipped} of ${postsSeen} posts. ` +
+        'That is far above the usual rate and points at a feed format change.',
     };
   }
 
@@ -649,17 +683,16 @@ export function tallyPosts(posts, subreddit) {
 
   for (const post of posts) {
     postsSeen++;
-    const isCandidate = postHasCodeCandidate(post);
-    // Isolate per post: assertValidCodeShape() throws on implausible values
-    // (e.g. a post claiming "100 keys"). Without this, one bad post aborted
-    // every remaining post in the subreddit.
+    // Counted *before* extraction, so this stays a true count of code-shaped
+    // posts. Counting it only on success made the "candidates but no codes"
+    // guard unreachable: extraction of a candidate always yields a code, so the
+    // condition could never hold and silent extraction rot became undetectable.
+    // The false alarm it was meant to fix is handled by a threshold instead.
+    if (postHasCodeCandidate(post)) postsWithCandidates++;
+    // Isolate per post: assertValidCodeShape() throws on implausible values.
+    // Without this, one bad post aborted every remaining post in the subreddit.
     try {
       codes.push(...extractCodesFromPost(post, subreddit));
-      // Only count a candidate whose extraction completed. A post that threw is
-      // already reported via postsSkipped; counting it here too would let a
-      // single legitimately-rejected giveaway ("100 golden keys") masquerade as
-      // a silent extraction failure and fail the whole run.
-      if (isCandidate) postsWithCandidates++;
     } catch (error) {
       postsSkipped++;
       warnings.push(`Skipping post ${post?.id ?? '<unknown>'}: ${error.message}`);

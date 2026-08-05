@@ -6,6 +6,11 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+  # A newly published advisory against an existing dependency produces no commit and
+  # no PR, so nothing would run the audit. A weekly run catches that, and also catches
+  # drift in the pinned toolchain and E2E environment.
+  schedule:
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -38,6 +43,11 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # Fails on any production advisory that is not explicitly triaged, and also on
+      # a triaged entry that no longer applies, so the allowlist cannot go stale.
+      - name: Dependency audit (triaged)
+        run: npm run audit:ci
 
       - name: Build
         run: npm run build

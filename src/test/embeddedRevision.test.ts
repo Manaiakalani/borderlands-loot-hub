@@ -54,15 +54,34 @@ describe("computeEmbeddedRevision", () => {
     expect(after).not.toBe(before);
   });
 
-  it("hashes every field of ShiftCode, including any added later", () => {
+  it("hashes every field that appears in the real dataset", () => {
     // Guards against the revision drifting back to an enumerated subset of
-    // fields. An explicit list silently stops covering new fields, so a later
-    // correction to one of them would again be invisible to cached clients.
-    const covered = new Set(
-      FIELD_PATCHES.flatMap(([, patch]) => Object.keys(patch)),
-    );
-    const actualFields = Object.keys(base);
-    expect([...actualFields].sort()).toEqual([...covered].sort());
+    // fields. Deriving the expected set from the committed data rather than from
+    // this file's fixture matters: the fixture omits the optional `keys` and
+    // `isUniversal` fields, so checking against it would pass while those went
+    // unhashed — which is the exact bug this test exists to catch.
+    const realFields = new Set<string>();
+    for (const code of mockShiftCodes) {
+      for (const key of Object.keys(code)) realFields.add(key);
+    }
+    expect(realFields.size).toBeGreaterThan(6);
+
+    for (const field of realFields) {
+      const entry = mockShiftCodes.find(
+        (c) => (c as unknown as Record<string, unknown>)[field] !== undefined,
+      )!;
+      const others = mockShiftCodes.slice(0, 3).filter((c) => c.id !== entry.id);
+      const mutated = {
+        ...entry,
+        [field]: typeof (entry as unknown as Record<string, unknown>)[field] === "boolean"
+          ? !(entry as unknown as Record<string, boolean>)[field]
+          : `__mutated_${field}__`,
+      } as ShiftCode;
+
+      expect(computeEmbeddedRevision([...others, entry])).not.toBe(
+        computeEmbeddedRevision([...others, mutated]),
+      );
+    }
   });
 
   it("changes when the collection length changes", () => {
