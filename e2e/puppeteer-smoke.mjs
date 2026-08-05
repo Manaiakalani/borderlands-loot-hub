@@ -1,7 +1,8 @@
 /**
  * Puppeteer E2E smoke tests
  * Run: node e2e/puppeteer-smoke.mjs
- * Requires production build served on localhost:4173
+ * Requires the production build served on the port in e2e-config.mjs (4273).
+ * Start it with: npx vite preview --port 4273 --strictPort
  */
 import puppeteer from 'puppeteer';
 import { BASE_URL as BASE, isAllowedRequestUrl } from './e2e-config.mjs';
