@@ -264,3 +264,129 @@ describe('useShiftCodes', () => {
     vi.useRealTimers();
   });
 });
+
+// normalizeCodes is the trust boundary for everything that isn't the embedded
+// dataset: today that's localStorage, but the same function guards fetchRemoteCodes
+// the moment VITE_DATA_SOURCE_URL is configured. Two of these rules are crash
+// guards rather than cosmetics — CodeCard indexes STATUS_CONFIG[code.status] and
+// GAME_INFO[code.game] directly, so an unrecognised value throws and takes the
+// whole list down. Only the code-format rule had a test.
+describe('useShiftCodes cache validation', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', localStorageMock);
+    localStorageMock.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  // A known-good entry rides along in every cache so a rejection is visible as
+  // "only the sentinel survived" rather than as a fallback to the embedded data,
+  // which would look identical no matter which rule fired.
+  const sentinel = makeCode({ id: 'sentinel', code: 'ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ' });
+
+  const rejected: Array<[string, Record<string, unknown>]> = [
+    ['id is missing', { id: undefined }],
+    ['id is blank', { id: '   ' }],
+    ['id is not a string', { id: 42 }],
+    ['code is malformed', { code: 'NOT-A-VALID-CODE' }],
+    ['game is unrecognised', { game: 'BL9' }],
+    ['game is not a string', { game: 3 }],
+    ['status is unrecognised', { status: 'pending' }],
+    ['status is not a string', { status: null }],
+    ['reward is not a string', { reward: { text: 'keys' } }],
+    ['rewardType is unrecognised', { rewardType: 'mystery-box' }],
+    ['source is a non-string', { source: 12345 }],
+    ['addedAt is not a date', { addedAt: 'yesterday' }],
+    ['addedAt is missing', { addedAt: undefined }],
+  ];
+
+  it.each(rejected)('drops a cached entry when %s', async (_label, overrides) => {
+    const bad = { ...makeCode({ id: 'bad-entry' }), ...overrides };
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData([sentinel, bad] as ShiftCode[]));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.codes.map((c) => c.id)).toEqual(['sentinel']);
+  });
+
+  it('falls back to embedded data when the cached codes are not an array', async () => {
+    localStorage.setItem(
+      STORAGE_KEYS.CODES_CACHE,
+      JSON.stringify({
+        codes: { '0': sentinel },
+        timestamp: Date.now(),
+        version: DATA_VERSION,
+        source: 'local',
+        embeddedRevision: EMBEDDED_REVISION,
+      })
+    );
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.codes.length).toBeGreaterThan(1);
+    expect(result.current.codes.some((c) => c.id === 'sentinel')).toBe(false);
+    // Left in place it would keep blanking the page for the whole 7-day window.
+    // The hook re-caches the embedded data it fell back to, so the key exists
+    // again — what matters is that the malformed payload is gone.
+    expect(localStorage.getItem(STORAGE_KEYS.CODES_CACHE)).not.toContain('sentinel');
+  });
+
+  it('falls back to embedded data when the cache holds an empty code list', async () => {
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData([]));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.codes.length).toBeGreaterThan(1);
+  });
+
+  it('falls back to embedded data when every cached entry fails validation', async () => {
+    const allBad = [
+      { ...makeCode({ id: 'bad-1' }), game: 'BL9' },
+      { ...makeCode({ id: 'bad-2' }), code: 'NOPE' },
+    ] as unknown as ShiftCode[];
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData(allBad));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.codes.length).toBeGreaterThan(1);
+    expect(localStorage.getItem(STORAGE_KEYS.CODES_CACHE)).not.toContain('bad-1');
+  });
+
+  it('strips control characters out of cached free text', async () => {
+    const code = makeCode({ id: 'ctrl', reward: '5 Golden\u0000\u001b Keys', source: 'r/test\u0007' });
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData([code]));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.codes[0].reward).toBe('5 Golden Keys');
+    expect(result.current.codes[0].source).toBe('r/test');
+  });
+
+  it('caps cached free text at 200 characters', async () => {
+    const code = makeCode({ id: 'long', reward: 'A'.repeat(500) });
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData([code]));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.codes[0].reward).toHaveLength(200);
+  });
+
+  it('substitutes a fallback when cached free text sanitizes to nothing', async () => {
+    const code = makeCode({ id: 'empty', reward: '\u0000\u0001\u0002' });
+    localStorage.setItem(STORAGE_KEYS.CODES_CACHE, makeCacheData([code]));
+
+    const { result } = renderHook(() => useShiftCodes());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.codes[0].reward).toBe('SHiFT Reward');
+  });
+});

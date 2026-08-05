@@ -1,8 +1,11 @@
 name: CI
 
-# Validate pull requests before they can be merged. The deploy-pages workflow
-# only runs lint/test/build on pushes to main (i.e. *after* merge), so without
-# this, broken code can land on main before any check runs.
+# Validate pull requests before they can be merged, and provide the E2E suite that
+# deploy-pages.yml does not run.
+#
+# Note this does NOT gate pushes to main: main is unprotected and the daily scraper
+# pushes to it directly, so deploy-pages.yml (push: main) is what actually guards
+# post-merge code. Keep tsc/lint/test/audit mirrored there.
 on:
   pull_request:
   workflow_dispatch:

@@ -42,6 +42,21 @@ describe("fetch-reddit-codes parsing", () => {
     expect(extractRewardLabel("5 golden keys")).toBe("5 Golden Keys");
   });
 
+  it("reads the count for every key type, not just golden", () => {
+    expect(extractKeyCount("5 skeleton keys")).toBe(5);
+    expect(extractKeyCount("3 diamond keys")).toBe(3);
+    expect(extractRewardLabel("5 skeleton keys")).toBe("5 Skeleton Keys");
+    expect(extractRewardLabel("3 diamond keys")).toBe("3 Diamond Keys");
+  });
+
+  it("does not read a key count out of a word that merely contains 'key'", () => {
+    // Without the word boundaries this matches "key" inside "keychains" and pairs
+    // the leading digit with it, labelling the post "5 Golden Keys".
+    expect(extractKeyCount("5 keychains in this giveaway")).toBe(1);
+    expect(extractRewardLabel("5 keychains in this giveaway")).toBe("SHiFT Reward");
+    expect(extractKeyCount("3 monkeys appeared")).toBe(1);
+  });
+
   it("parses expiration dates and returns null when absent", () => {
     expect(parseExpiration("no expiry mentioned here")).toBeNull();
     const parsed = parseExpiration("expires 12/31");
@@ -592,6 +607,31 @@ describe("tallyPosts (counters that drive assessRunHealth)", () => {
     const tally = tallyPosts(posts, "Borderlands4");
     expect(tally.codes[0].keys).toBe(5);
     expect(tally.codes[0].reward).toBe("5 Golden Keys");
+  });
+
+  // The count and the label used to come from two different regexes, and the count
+  // one only tolerated the word "golden" between the digit and "key". Every
+  // skeleton/diamond post therefore shipped keys: 1 next to an accurate label.
+  it.each([
+    ["skeleton", "5 skeleton keys", 5, "5 Skeleton Keys"],
+    ["diamond", "3 diamond keys", 3, "3 Diamond Keys"],
+    ["golden", "7 golden keys", 7, "7 Golden Keys"],
+  ])("agrees on the count for %s keys", (_type, phrase, expectedKeys, expectedLabel) => {
+    const posts = [
+      { id: "1", title: `${phrase} ${REAL}`, selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.codes[0].keys).toBe(expectedKeys);
+    expect(tally.codes[0].reward).toBe(expectedLabel);
+  });
+
+  it("leaves keys unset for a reward that is not keys at all", () => {
+    const posts = [
+      { id: "1", title: `Free Vault Hunter skin ${REAL}`, selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.codes[0].rewardType).not.toMatch(/-keys$/);
+    expect(tally.codes[0].keys).toBeUndefined();
   });
 
   it("counts a code-shaped post as a candidate even when extraction throws", () => {

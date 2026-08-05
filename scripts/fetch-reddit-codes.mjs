@@ -127,10 +127,31 @@ function detectRewardType(text) {
   return 'golden-keys';
 }
 
+/**
+ * Single source of truth for "how many keys, of what type, does this post advertise".
+ *
+ * The `keys` field and the human-readable reward label are both derived from this one
+ * match, so they cannot report different quantities. They used to use two different
+ * regexes, and the count pattern only tolerated the word "golden" between the digit
+ * and "key" — so "5 skeleton keys" yielded `keys: 1` next to a "5 Skeleton Keys"
+ * label. The `\b` around `keys?` keeps words like "monkeys" from registering.
+ */
+function matchKeyReward(text) {
+  const match = normalizeText(text, '').match(
+    /(?:(\d+)\s*)?(golden|skeleton|diamond)?\s*\bkeys?\b/i
+  );
+  if (!match) return null;
+  const [, rawCount, rawType] = match;
+  return {
+    count: rawCount === undefined ? 1 : Number.parseInt(rawCount, 10),
+    hasExplicitCount: rawCount !== undefined,
+    type: (rawType || 'golden').toLowerCase(),
+  };
+}
+
 function extractKeyCount(text) {
-  const normalizedText = normalizeText(text, '');
-  const match = normalizedText.match(/(\d+)\s*(?:golden\s*)?key/i);
-  return match ? parseInt(match[1], 10) : 1;
+  const match = matchKeyReward(text);
+  return match ? match.count : 1;
 }
 
 /**
@@ -151,11 +172,12 @@ function plausibleKeyCount(count) {
 
 function extractRewardLabel(text) {
   const normalizedText = normalizeText(text, '');
-  const keyMatch = normalizedText.match(/(\d+)\s*(golden|skeleton|diamond)?\s*keys?/i);
-  if (keyMatch) {
-    const type = keyMatch[2]?.toLowerCase() || 'golden';
-    const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
-    const count = plausibleKeyCount(Number.parseInt(keyMatch[1], 10));
+  const keyMatch = matchKeyReward(normalizedText);
+  // Only a post that states a quantity gets a key label; a passing mention of "key"
+  // shouldn't outrank an explicit skin/weapon reward further down.
+  if (keyMatch && keyMatch.hasExplicitCount) {
+    const typeLabel = keyMatch.type.charAt(0).toUpperCase() + keyMatch.type.slice(1);
+    const count = plausibleKeyCount(keyMatch.count);
     // Implausible quantity: keep the reward *type*, drop the unbelievable number.
     if (count === undefined) return `${typeLabel} Keys`;
     return `${count} ${typeLabel} Key${count > 1 ? 's' : ''}`;

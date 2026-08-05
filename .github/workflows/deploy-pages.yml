@@ -46,6 +46,12 @@ jobs:
       - name: Test
         run: npm test
 
+      # CI only triggers on pull_request / dispatch / weekly cron, and code reaches
+      # main by direct push (the daily scraper commits straight to it). Without this
+      # step the dependency audit would only ever run on the weekly cron.
+      - name: Dependency audit (triaged)
+        run: npm run audit:ci
+
       - name: Build
         run: npm run build
 

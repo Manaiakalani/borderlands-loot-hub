@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   isCodeExpired,
   getEffectiveStatus,
@@ -47,6 +47,38 @@ describe("isCodeExpired", () => {
 
   it("returns false for a code with null expiresAt", () => {
     expect(isCodeExpired(makeCode({ expiresAt: null }))).toBe(false);
+  });
+});
+
+describe("isCodeExpired date-only semantics", () => {
+  // A bare YYYY-MM-DD expiry means "good through the end of that day, local time".
+  // scripts/fetch-reddit-codes.mjs mirrors this rule and says so in a comment, but
+  // only its half was pinned by a test. Parsing the string as plain UTC midnight
+  // instead retires a still-valid code up to a day early and undercounts "Active".
+  //
+  // 23:30 local is chosen deliberately: it lands after UTC midnight of the same
+  // date for every offset from UTC-12 to UTC+14, so the assertion distinguishes the
+  // two readings no matter where this suite runs.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("keeps a code expiring today active at 23:30 local", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 1, 9, 23, 30, 0));
+    expect(isCodeExpired(makeCode({ expiresAt: "2026-02-09" }))).toBe(false);
+  });
+
+  it("expires that same code once its local day has ended", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 1, 10, 0, 0, 30));
+    expect(isCodeExpired(makeCode({ expiresAt: "2026-02-09" }))).toBe(true);
+  });
+
+  it("reports the same thing through getEffectiveStatus", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 1, 9, 23, 30, 0));
+    expect(getEffectiveStatus(makeCode({ expiresAt: "2026-02-09" }))).toBe("active");
   });
 });
 

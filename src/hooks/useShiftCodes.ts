@@ -186,7 +186,12 @@ const getCachedData = (): CacheData | null => {
     }
 
     const normalizedCodes = normalizeCodes(cacheData.codes);
-    if (normalizedCodes.length === 0 && Array.isArray(cacheData.codes) && cacheData.codes.length > 0) {
+    // A cache that normalizes to nothing is useless whatever shape it started in:
+    // a non-array `codes`, an empty array, or entries that all failed validation.
+    // The old guard only covered the non-empty-array case, so a malformed cache was
+    // returned as a valid hit — rendering an empty site and, because the entry was
+    // never evicted, keeping it empty for the full 7-day cache window.
+    if (normalizedCodes.length === 0) {
       safeRemoveItem(STORAGE_KEYS.CODES_CACHE);
       return null;
     }
