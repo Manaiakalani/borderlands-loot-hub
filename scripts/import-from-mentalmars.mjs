@@ -107,9 +107,8 @@ function buildEntry(c, today) {
   ];
   if (c.keys) lines.push(`    keys: ${c.keys},`);
   lines.push(
-    `    source: '${c.source}',`,
+    `    source: '${escapeTsString(c.source)}',`,
     `    addedAt: '${today}',`,
-    `    lastVerifiedAt: '${today}',`,
     `    expiresAt: ${c.expiresAt ? `'${c.expiresAt}'` : 'null'},`,
     `    isUniversal: false,`,
     `  },`,

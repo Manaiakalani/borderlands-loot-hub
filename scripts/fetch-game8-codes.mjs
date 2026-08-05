@@ -161,7 +161,6 @@ async function fetchGame8Codes() {
       keys: extractKeyCount(reward),
       source: 'game8.co',
       addedAt: today,
-      lastVerifiedAt: today,
       expiresAt,
       isUniversal: true,
     });
@@ -183,7 +182,6 @@ async function fetchGame8Codes() {
         rewardType: 'other',
         source: 'game8.co',
         addedAt: today,
-        lastVerifiedAt: today,
         expiresAt: null,
         isUniversal: true,
       });
@@ -239,7 +237,6 @@ async function main() {
     rewardType: '${code.rewardType}',${code.keys ? `\n    keys: ${code.keys},` : ''}
     source: '${escapeTsString(code.source)}',
     addedAt: '${code.addedAt}',
-    lastVerifiedAt: '${code.lastVerifiedAt}',
     expiresAt: ${code.expiresAt ? `'${code.expiresAt}'` : 'null'},
     isUniversal: ${code.isUniversal},
   },`).join('');

@@ -9,6 +9,9 @@ import {
   extractCodesFromPost,
   generateCodeEntry,
   dedupeCodes,
+  applyPerRunCap,
+  assessRunHealth,
+  postHasCodeCandidate,
   MAX_NEW_CODES_PER_RUN,
 } from "../../scripts/fetch-reddit-codes.mjs";
 
@@ -307,5 +310,116 @@ describe("MAX_NEW_CODES_PER_RUN", () => {
     expect(Number.isInteger(MAX_NEW_CODES_PER_RUN)).toBe(true);
     expect(MAX_NEW_CODES_PER_RUN).toBeGreaterThan(0);
     expect(MAX_NEW_CODES_PER_RUN).toBeLessThanOrEqual(50);
+  });
+
+  // The assertions above only describe the constant. These exercise the code path
+  // that has to honour it, which is the part that could actually regress.
+  it("truncates an oversized batch to the cap", () => {
+    const codes = Array.from({ length: MAX_NEW_CODES_PER_RUN + 17 }, (_, i) => ({ code: `c${i}` }));
+    const capped = applyPerRunCap(codes);
+    expect(capped).toHaveLength(MAX_NEW_CODES_PER_RUN);
+    // Keeps the most recent (leading) entries, leaving the tail for the next run.
+    expect(capped[0]).toBe(codes[0]);
+    expect(capped.at(-1)).toBe(codes[MAX_NEW_CODES_PER_RUN - 1]);
+  });
+
+  it("passes an under-cap batch through untouched", () => {
+    const codes = Array.from({ length: 3 }, (_, i) => ({ code: `c${i}` }));
+    expect(applyPerRunCap(codes)).toBe(codes);
+    expect(applyPerRunCap([])).toEqual([]);
+  });
+
+  it("passes an exactly-at-cap batch through untouched", () => {
+    const codes = Array.from({ length: MAX_NEW_CODES_PER_RUN }, (_, i) => ({ code: `c${i}` }));
+    expect(applyPerRunCap(codes)).toHaveLength(MAX_NEW_CODES_PER_RUN);
+  });
+});
+
+/**
+ * The previous systemic-failure guard (`postsSkipped === postsSeen`) was close to
+ * unreachable: a single ordinary post with no code defeated it, and an HTTP 200
+ * carrying malformed XML produced `postsSeen === 0`, which exited green. These
+ * cases pin the failure modes that must fail the workflow.
+ */
+describe("assessRunHealth", () => {
+  const healthy = {
+    anyReachable: true,
+    subredditsWithPosts: 4,
+    postsSeen: 80,
+    postsSkipped: 0,
+    postsWithCandidates: 3,
+    codesExtracted: 5,
+  };
+
+  it("reports ok for a normal run", () => {
+    expect(assessRunHealth(healthy).level).toBe("ok");
+  });
+
+  it("reports ok for a quiet day with no codes posted", () => {
+    // Real and common: feeds work, nobody posted a code.
+    expect(
+      assessRunHealth({ ...healthy, postsWithCandidates: 0, codesExtracted: 0 }).level,
+    ).toBe("ok");
+  });
+
+  it("skips softly when no source was reachable", () => {
+    // A daily red X for a best-effort scraper is noise, not signal.
+    const result = assessRunHealth({
+      ...healthy,
+      anyReachable: false,
+      subredditsWithPosts: 0,
+      postsSeen: 0,
+      postsWithCandidates: 0,
+      codesExtracted: 0,
+    });
+    expect(result.level).toBe("skip");
+  });
+
+  it("errors when every source answered but no post could be parsed", () => {
+    // HTTP 200 + malformed XML. The old guard exited 0 here.
+    const result = assessRunHealth({
+      ...healthy,
+      subredditsWithPosts: 0,
+      postsSeen: 0,
+      postsWithCandidates: 0,
+      codesExtracted: 0,
+    });
+    expect(result.level).toBe("error");
+    expect(result.message).toMatch(/feed format/i);
+  });
+
+  it("errors when extraction threw for every post fetched", () => {
+    const result = assessRunHealth({ ...healthy, postsSkipped: healthy.postsSeen });
+    expect(result.level).toBe("error");
+  });
+
+  it("errors when code-shaped posts exist but nothing was extracted", () => {
+    // The regression the old guard could never see: parsing works, extraction broke.
+    const result = assessRunHealth({ ...healthy, postsWithCandidates: 6, codesExtracted: 0 });
+    expect(result.level).toBe("error");
+    expect(result.message).toMatch(/extraction path is broken/i);
+  });
+});
+
+describe("postHasCodeCandidate", () => {
+  it("detects a code in the title or the body", () => {
+    expect(postHasCodeCandidate({ title: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", selftext: "" })).toBe(true);
+    expect(postHasCodeCandidate({ title: "hi", selftext: "ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ" })).toBe(true);
+  });
+
+  it("returns false for ordinary posts and malformed input", () => {
+    expect(postHasCodeCandidate({ title: "what is the best gun", selftext: "no codes here" })).toBe(false);
+    expect(postHasCodeCandidate(null)).toBe(false);
+    expect(postHasCodeCandidate(undefined)).toBe(false);
+    expect(postHasCodeCandidate({})).toBe(false);
+  });
+
+  it("is not corrupted by the shared regex's lastIndex", () => {
+    // SHIFT_CODE_REGEX is a module-level /g regex; .test() advances lastIndex, so
+    // repeated calls silently returned false before lastIndex was reset.
+    const post = { title: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", selftext: "" };
+    expect(postHasCodeCandidate(post)).toBe(true);
+    expect(postHasCodeCandidate(post)).toBe(true);
+    expect(postHasCodeCandidate(post)).toBe(true);
   });
 });

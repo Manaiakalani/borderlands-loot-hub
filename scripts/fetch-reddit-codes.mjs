@@ -479,6 +479,91 @@ function writeNewCodes(fileContent, newCodes) {
   writeShiftCodesFile(SHIFT_CODES_PATH, updatedContent);
 }
 
+/**
+ * Bound how many codes a single unattended run may append.
+ *
+ * Extracted from main() so the cap is actually exercised by tests rather than
+ * merely asserting the constant's value.
+ */
+function applyPerRunCap(codes) {
+  if (codes.length <= MAX_NEW_CODES_PER_RUN) return codes;
+  console.warn(
+    `\n⚠️  ${codes.length} new codes exceeds the per-run cap of ` +
+      `${MAX_NEW_CODES_PER_RUN}; adding the ${MAX_NEW_CODES_PER_RUN} most recent ` +
+      'and leaving the rest for the next run.',
+  );
+  return codes.slice(0, MAX_NEW_CODES_PER_RUN);
+}
+
+/**
+ * Does this post contain anything that *looks* like a SHiFT code?
+ *
+ * Counted separately from successful extraction so a run can tell "no new codes
+ * were posted today" (normal) apart from "codes were posted and we failed to read
+ * them" (a regression that must fail the workflow).
+ */
+function postHasCodeCandidate(post) {
+  if (!post || typeof post !== 'object') return false;
+  const combinedText = `${normalizeText(post.title, '')} ${normalizeText(post.selftext, '')}`;
+  SHIFT_CODE_REGEX.lastIndex = 0;
+  return SHIFT_CODE_REGEX.test(combinedText);
+}
+
+/**
+ * Decide whether a completed run was healthy, benignly empty, or systemically broken.
+ *
+ * Pure and exported so the failure modes are unit-testable without any network.
+ * The previous guard (`postsSkipped === postsSeen`) was near-unreachable: a single
+ * ordinary no-code post defeated it, and an HTTP 200 with malformed XML produced
+ * `postsSeen === 0`, which sailed straight through as success.
+ */
+function assessRunHealth(stats) {
+  const {
+    anyReachable,
+    subredditsWithPosts,
+    postsSeen,
+    postsSkipped,
+    postsWithCandidates,
+    codesExtracted,
+  } = stats;
+
+  if (!anyReachable) {
+    return {
+      level: 'skip',
+      message:
+        'All Reddit sources were unreachable this run (RSS + PullPush). ' +
+        'Skipping update; will retry on the next schedule.',
+    };
+  }
+
+  if (subredditsWithPosts === 0) {
+    return {
+      level: 'error',
+      message:
+        'Every Reddit source responded but not one post could be parsed from any subreddit. ' +
+        'This means the feed format changed, not that the subreddits are empty.',
+    };
+  }
+
+  if (postsSeen > 0 && postsSkipped === postsSeen) {
+    return {
+      level: 'error',
+      message: `Extraction threw for all ${postsSeen} posts fetched. This usually means the feed format changed.`,
+    };
+  }
+
+  if (postsWithCandidates > 0 && codesExtracted === 0) {
+    return {
+      level: 'error',
+      message:
+        `${postsWithCandidates} post(s) contained code-shaped text but zero codes were extracted. ` +
+        'The extraction path is broken.',
+    };
+  }
+
+  return { level: 'ok', message: `Scanned ${postsSeen} post(s) across ${subredditsWithPosts} subreddit(s).` };
+}
+
 // ── Main ───────────────────────────────────────────────────────────
 
 async function main() {
@@ -488,17 +573,21 @@ async function main() {
   // 1. Fetch posts from all subreddits (RSS primary, PullPush fallback)
   const allCodes = [];
   let anyReachable = false;
+  let subredditsWithPosts = 0;
   let postsSeen = 0;
   let postsSkipped = 0;
+  let postsWithCandidates = 0;
 
   for (const subreddit of SUBREDDITS) {
     console.log(`\n📂 r/${subreddit}`);
     try {
       const { posts, reachable } = await fetchSubreddit(subreddit);
       if (reachable) anyReachable = true;
+      if (posts.length > 0) subredditsWithPosts++;
 
       for (const post of posts) {
         postsSeen++;
+        if (postHasCodeCandidate(post)) postsWithCandidates++;
         // Isolate per post: assertValidCodeShape() throws on implausible values
         // (e.g. a post claiming "100 keys"). Without this, one bad post aborted
         // every remaining post in the subreddit.
@@ -517,24 +606,25 @@ async function main() {
     }
   }
 
-  // Fail *soft* if every source for every subreddit was unreachable. A daily red
-  // X for a best-effort scraper is just noise — we simply do nothing this run.
-  if (!anyReachable) {
-    console.warn(
-      '\n⚠️  All Reddit sources were unreachable this run (RSS + PullPush). ' +
-        'Skipping update; will retry on the next schedule.',
-    );
+  // Fail *soft* when nothing was reachable — a daily red X for a best-effort
+  // scraper is just noise. Fail *hard* when the sources answered but the parsing
+  // or extraction path is broken, so the scraper can't silently rot for weeks.
+  const health = assessRunHealth({
+    anyReachable,
+    subredditsWithPosts,
+    postsSeen,
+    postsSkipped,
+    postsWithCandidates,
+    codesExtracted: allCodes.length,
+  });
+
+  if (health.level === 'skip') {
+    console.warn(`\n⚠️  ${health.message}`);
     return;
   }
 
-  // Reaching posts but failing to parse *every* one is a systemic breakage (a feed
-  // format change, say), not the "no new codes today" case. Without this it exits
-  // 0 with a green check and the scraper can silently rot for weeks.
-  if (postsSkipped > 0 && postsSkipped === postsSeen) {
-    console.error(
-      `::error::Extraction failed for all ${postsSeen} posts fetched. ` +
-        'This usually means the feed format changed.',
-    );
+  if (health.level === 'error') {
+    console.error(`::error::${health.message}`);
     process.exitCode = 1;
     return;
   }
@@ -559,15 +649,7 @@ async function main() {
   // Bound the blast radius of a spam or malformed feed. Reddit is an untrusted
   // source and these commits land on main unattended, so cap what one run can
   // add. An upvote threshold is not usable here: the RSS feeds always report 0.
-  let codesToAdd = newCodes;
-  if (codesToAdd.length > MAX_NEW_CODES_PER_RUN) {
-    console.warn(
-      `\n⚠️  ${codesToAdd.length} new codes exceeds the per-run cap of ` +
-        `${MAX_NEW_CODES_PER_RUN}; adding the ${MAX_NEW_CODES_PER_RUN} most recent ` +
-        'and leaving the rest for the next run.',
-    );
-    codesToAdd = codesToAdd.slice(0, MAX_NEW_CODES_PER_RUN);
-  }
+  const codesToAdd = applyPerRunCap(newCodes);
 
   // 4. Write new codes to shiftCodes.ts
   writeNewCodes(fileContent, codesToAdd);
@@ -587,8 +669,11 @@ export {
   parseExpiration,
   resolveYearlessDate,
   extractCodesFromPost,
+  postHasCodeCandidate,
+  assessRunHealth,
   generateCodeEntry,
   dedupeCodes,
+  applyPerRunCap,
   MAX_NEW_CODES_PER_RUN,
 };
 

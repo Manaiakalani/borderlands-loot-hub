@@ -3,13 +3,14 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useShiftCodes } from '../hooks/useShiftCodes';
+import { useShiftCodes, computeEmbeddedRevision } from '../hooks/useShiftCodes';
 import { STORAGE_KEYS, DATA_VERSION } from '../config/dataConfig';
 import { mockShiftCodes } from '../data/shiftCodes';
 import type { ShiftCode } from '../data/shiftCodes';
 
-// Must match the EMBEDDED_REVISION computation in useShiftCodes.ts
-const EMBEDDED_REVISION = `${mockShiftCodes.length}-${mockShiftCodes[0]?.id ?? ''}-${mockShiftCodes[mockShiftCodes.length - 1]?.id ?? ''}`;
+// Derived from the hook's own exported helper rather than re-deriving the formula:
+// the previous copy silently went stale when the revision became content-sensitive.
+const EMBEDDED_REVISION = computeEmbeddedRevision(mockShiftCodes);
 
 function makeCode(overrides: Partial<ShiftCode> = {}): ShiftCode {
   return {

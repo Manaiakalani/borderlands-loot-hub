@@ -60,6 +60,14 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        /**
+         * Alias for the vault-gold brand colour (`--primary`, commented "Vault Gold"
+         * in index.css). About, Privacy and Footer use `vault-gold` utilities in ~44
+         * places; without this entry Tailwind emitted no rule for any of them, so
+         * `bg-vault-gold text-slate-900` step badges rendered near-black on a dark
+         * card and every gold heading fell back to plain foreground.
+         */
+        "vault-gold": "hsl(var(--primary))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

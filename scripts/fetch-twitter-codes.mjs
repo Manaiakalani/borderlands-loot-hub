@@ -180,7 +180,6 @@ function extractCodesFromTweets(tweets, author) {
         rewardType,
         source: `Twitter ${normalizeText(author, 'unknown')}`,
         addedAt: tweetDate ? tweetDate.split('T')[0] : new Date().toISOString().split('T')[0],
-        lastVerifiedAt: new Date().toISOString().split('T')[0],
         isUniversal: !game,
         tweetId,
         tweetDate: tweetDate ? tweetDate.split('T')[0] : new Date().toISOString().split('T')[0],

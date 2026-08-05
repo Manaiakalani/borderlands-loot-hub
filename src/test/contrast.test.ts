@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 
 /**
  * Contrast regression guard.
@@ -70,4 +70,89 @@ describe("theme contrast (WCAG AA)", () => {
     const [, , lightness] = token("destructive");
     expect(lightness).toBeGreaterThanOrEqual(62);
   });
+});
+
+/**
+ * Opacity-modified text utilities were invisible to the checks above, which only
+ * read opaque tokens. `text-muted-foreground/70` in the footer composited to
+ * 3.85:1 — below AA — while `--muted-foreground` itself measured a comfortable
+ * 6.63:1. This suite composites the alpha against each plausible backdrop and
+ * checks the colour a user actually sees.
+ */
+
+function composite(
+  fg: [number, number, number],
+  bg: [number, number, number],
+  alpha: number,
+): [number, number, number] {
+  return fg.map((c, i) => Math.round(c * alpha + bg[i] * (1 - alpha))) as [number, number, number];
+}
+
+function compositeContrast(fgToken: string, alpha: number, bgToken: string): number {
+  const bg = hslToRgb(token(bgToken));
+  const blended = composite(hslToRgb(token(fgToken)), bg, alpha);
+  const la = relativeLuminance(blended);
+  const lb = relativeLuminance(bg);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+const TSX_SOURCES = (() => {
+  const found: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".tsx")) found.push(full);
+    }
+  };
+  walk(resolve(process.cwd(), "src"));
+  return found;
+})();
+
+/** Text utilities whose colour resolves to a CSS custom property in index.css. */
+const ALPHA_TEXT_PATTERN = /(?:^|[\s"'`:])((?:[a-z-]+:)*)text-([a-z-]+)\/(\d{1,3})\b/g;
+
+const alphaTextUsages = TSX_SOURCES.flatMap((file) => {
+  const content = readFileSync(file, "utf8");
+  return [...content.matchAll(ALPHA_TEXT_PATTERN)]
+    .map((m) => ({ variant: m[1], name: m[2], alpha: Number(m[3]) / 100, file }))
+    // Interactive-state colours are checked too, but only when the token exists
+    // as an HSL custom property — Tailwind palette colours (slate-400) are not.
+    .filter(({ name }) => new RegExp(`--${name}:\\s*[\\d.]+\\s`).test(css));
+});
+
+describe("alpha-composited text contrast (WCAG AA)", () => {
+  it("finds the alpha-modified text utilities in the source", () => {
+    // Without this the suite would pass vacuously if the scan regex broke.
+    expect(alphaTextUsages.length).toBeGreaterThan(0);
+  });
+
+  it("composites correctly against a known case", () => {
+    // muted-foreground at full opacity must equal the opaque measurement.
+    expect(compositeContrast("muted-foreground", 1, "background")).toBeCloseTo(
+      contrast("muted-foreground", "background"),
+      5,
+    );
+  });
+
+  it.each(["background", "card", "muted"])(
+    "keeps every alpha-modified text utility above 4.5:1 on --%s",
+    (surface) => {
+      const failures = alphaTextUsages
+        .map((usage) => ({
+          ...usage,
+          ratio: compositeContrast(usage.name, usage.alpha, surface),
+        }))
+        .filter(({ ratio }) => ratio < AA_NORMAL)
+        .map(
+          ({ variant, name, alpha, ratio, file }) =>
+            `${variant}text-${name}/${Math.round(alpha * 100)} = ${ratio.toFixed(2)}:1 in ${file
+              .split(/[\\/]/)
+              .slice(-2)
+              .join("/")}`,
+        );
+
+      expect(failures).toEqual([]);
+    },
+  );
 });

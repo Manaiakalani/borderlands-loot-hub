@@ -1,5 +1,5 @@
 import { useState, memo, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles, Calendar, CheckCircle } from 'lucide-react';
+import { Copy, Check, Clock, AlertCircle, ExternalLink, Key, Sparkles, Calendar } from 'lucide-react';
 import { ShiftCode, GAME_INFO, CodeStatus, RewardType } from '@/data/shiftCodes';
 import { SHIFT_REDEEM_URL } from '@/config/dataConfig';
 import { Button } from '@/components/ui/button';
@@ -245,7 +245,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
 
       {/* Reward */}
       <p className="text-sm text-muted-foreground mb-4 flex items-center gap-2">
-        <Key className="w-4 h-4 text-primary/60" />
+        <Key className="w-4 h-4 text-primary/70" aria-hidden="true" />
         {code.reward}
       </p>
 
@@ -255,14 +255,6 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
           <span className="text-xs text-muted-foreground">
             Source: {code.source}
           </span>
-          
-          {/* Last Verified Date */}
-          {code.lastVerifiedAt && (
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <CheckCircle className="w-3 h-3 text-success" />
-              Verified: {formatDate(code.lastVerifiedAt)} ({getRelativeTime(code.lastVerifiedAt)})
-            </span>
-          )}
           
           {/* Expiration Date */}
           {code.expiresAt && (

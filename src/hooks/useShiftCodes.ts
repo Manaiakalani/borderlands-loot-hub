@@ -7,8 +7,32 @@ const VALID_GAMES = new Set<GameType>(['BL1', 'BL2', 'TPS', 'BL3', 'BL4', 'WONDE
 const VALID_STATUSES = new Set<CodeStatus>(['active', 'expired', 'unknown']);
 const VALID_REWARD_TYPES = new Set<RewardType>(['golden-keys', 'skeleton-keys', 'diamond-keys', 'skin', 'cosmetic', 'weapon', 'other']);
 
-/** Simple hash of embedded data length + first/last IDs to detect new deployments */
-const EMBEDDED_REVISION = `${mockShiftCodes.length}-${mockShiftCodes[0]?.id ?? ''}-${mockShiftCodes[mockShiftCodes.length - 1]?.id ?? ''}`;
+/** FNV-1a 32-bit hash — fast, dependency-free, and sensitive to every character */
+const fnv1a = (input: string): string => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36);
+};
+
+/**
+ * Content-sensitive revision of a code dataset.
+ *
+ * The previous revision was `length + firstId + lastId`, which could not see an
+ * *edit* to an existing entry: correcting a wrong expiry date left the revision
+ * unchanged, so returning visitors kept serving the bad value from cache for the
+ * full 7-day window. Hashing the fields that drive rendering fixes that.
+ *
+ * Exported for tests; the module computes it once for the embedded dataset.
+ */
+export const computeEmbeddedRevision = (codes: readonly ShiftCode[]): string =>
+  `${codes.length}-${fnv1a(
+    codes.map((c) => `${c.id}|${c.code}|${c.status}|${c.expiresAt ?? ''}|${c.addedAt}|${c.reward}`).join('\n'),
+  )}`;
+
+const EMBEDDED_REVISION = computeEmbeddedRevision(mockShiftCodes);
 
 /** Safe localStorage helper — graceful no-op when storage is unavailable */
 const safeRemoveItem = (key: string): void => {
@@ -68,9 +92,6 @@ const normalizeCodes = (codes: unknown): ShiftCode[] => {
       normalized.expiresAt = candidate.expiresAt;
     } else if (candidate.expiresAt === null) {
       normalized.expiresAt = null;
-    }
-    if (typeof candidate.lastVerifiedAt === 'string' && isValidDateString(candidate.lastVerifiedAt.slice(0, 10))) {
-      normalized.lastVerifiedAt = candidate.lastVerifiedAt;
     }
     if (typeof candidate.isUniversal === 'boolean') {
       normalized.isUniversal = candidate.isUniversal;

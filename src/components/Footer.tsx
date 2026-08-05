@@ -54,7 +54,7 @@ export const Footer = memo(function Footer() {
               <p className="text-sm text-muted-foreground">
                 Codes aggregated from public sources. Not affiliated with Gearbox Software.
               </p>
-              <p className="text-xs text-muted-foreground/70 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Always verify codes at the official redemption site before use.
               </p>
             </div>

@@ -85,8 +85,9 @@ export const STORAGE_KEYS = {
  * v3: Added expiresAt and lastVerifiedAt fields
  * v4: Added Borderlands 4 support and game8.co codes
  * v5: Added r/Borderlandsshiftcodes Reddit codes
+ * v6: Removed the unsubstantiated lastVerifiedAt field and corrected malformed expiry dates
  */
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 6;
 
 /** Official SHiFT redemption URL */
 export const SHIFT_REDEEM_URL = 'https://shift.gearboxsoftware.com/rewards';

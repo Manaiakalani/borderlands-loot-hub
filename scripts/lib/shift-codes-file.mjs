@@ -56,15 +56,31 @@ export function sanitizeText(value, { maxLength = 200, fallback = '' } = {}) {
  * into the generated TypeScript *without* escapeTsString, so this validator is
  * the only thing standing between a malformed date and the source file.
  */
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
 
 function isValidIsoDate(value) {
-  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value)) return false;
-  const [y, m, d] = value.slice(0, 10).split('-').map(Number);
+  if (typeof value !== 'string') return false;
+  const match = ISO_DATE_PATTERN.exec(value);
+  if (!match) return false;
+
+  const [, year, month, day, hour, minute, second, offset] = match;
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
   const parsed = new Date(Date.UTC(y, m - 1, d));
-  return (
-    parsed.getUTCFullYear() === y && parsed.getUTCMonth() === m - 1 && parsed.getUTCDate() === d
-  );
+  if (parsed.getUTCFullYear() !== y || parsed.getUTCMonth() !== m - 1 || parsed.getUTCDate() !== d) {
+    return false;
+  }
+
+  // The date portion alone is not enough: `\d{2}:\d{2}` happily matches `T99:99`.
+  if (hour !== undefined && (Number(hour) > 23 || Number(minute) > 59)) return false;
+  if (second !== undefined && Number(second) > 60) return false;
+  if (offset && offset !== 'Z') {
+    const [offsetHour, offsetMinute] = offset.slice(1).split(':').map(Number);
+    if (offsetHour > 14 || offsetMinute > 59) return false;
+  }
+
+  return true;
 }
 
 export function assertValidCodeShape(code) {
@@ -105,8 +121,12 @@ export function assertValidCodeShape(code) {
     throw new Error(`Invalid expiresAt: ${candidate.expiresAt}`);
   }
 
-  if (candidate.lastVerifiedAt !== undefined && candidate.lastVerifiedAt !== null && !isValidIsoDate(candidate.lastVerifiedAt)) {
-    throw new Error(`Invalid lastVerifiedAt: ${candidate.lastVerifiedAt}`);
+  // `lastVerifiedAt` was removed from the ShiftCode interface: nothing in this repo
+  // ever re-verifies a code by redeeming it, so the field only ever produced a
+  // false "✓ Verified" badge. Reject it loudly so a stale generator fails the run
+  // rather than silently reintroducing an unsubstantiated claim.
+  if (candidate.lastVerifiedAt !== undefined) {
+    throw new Error('lastVerifiedAt is no longer part of ShiftCode — remove it from the generator.');
   }
 
   if (typeof candidate.source !== 'string' || candidate.source.length > 200) {

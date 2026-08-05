@@ -165,9 +165,16 @@ describe("shift-codes-file helper", () => {
     expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-13-01' })).toThrow(/expiresAt/i);
     expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-02-30' })).toThrow(/expiresAt/i);
     expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-02-29' })).toThrow(/expiresAt/i); // 2026 is not a leap year
-    expect(() => assertValidCodeShape({ ...base, lastVerifiedAt: 'yesterday' })).toThrow(/lastVerifiedAt/i);
     expect(() => assertValidCodeShape({ ...base, addedAt: '2026-6-1' })).toThrow(/addedAt/i);
     expect(() => assertValidCodeShape({ ...base, addedAt: 20260601 })).toThrow(/addedAt/i);
+
+    // The time component was previously matched as `\d{2}:\d{2}` and never
+    // range-checked, so an impossible clock time sailed through.
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-12-31T99:99' })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-12-31T24:00' })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-12-31T12:60' })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-12-31T12:00:99' })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-12-31T12:00+99:00' })).toThrow(/expiresAt/i);
 
     // Formats the scrapers legitimately produce must still pass.
     expect(assertValidCodeShape({ ...base, expiresAt: '2028-02-29' })).toBe(true); // 2028 is a leap year
@@ -175,6 +182,28 @@ describe("shift-codes-file helper", () => {
     expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31' })).toBe(true);
     expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31T23:59:59' })).toBe(true);
     expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31T23:59:59.000Z' })).toBe(true);
+    expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31T23:59:60Z' })).toBe(true); // leap second
+    expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31T00:00-08:00' })).toBe(true);
+  });
+
+  it("rejects lastVerifiedAt outright", () => {
+    // The field was removed from ShiftCode: nothing in this repo ever redeems a
+    // code to confirm it works, so it only ever produced a false "Verified" badge.
+    // A stale generator that still stamps it must fail the run, not write it.
+    const base = {
+      id: 'lv-1',
+      code: 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY',
+      game: 'BL4',
+      status: 'active',
+      reward: 'reward',
+      rewardType: 'golden-keys',
+      source: 'test',
+      addedAt: '2026-06-01',
+    };
+
+    expect(assertValidCodeShape(base)).toBe(true);
+    expect(() => assertValidCodeShape({ ...base, lastVerifiedAt: '2026-06-01' })).toThrow(/lastVerifiedAt/i);
+    expect(() => assertValidCodeShape({ ...base, lastVerifiedAt: null })).toThrow(/lastVerifiedAt/i);
   });
 });
 
