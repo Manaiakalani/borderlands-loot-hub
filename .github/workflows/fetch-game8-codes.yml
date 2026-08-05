@@ -1,8 +1,15 @@
 name: Fetch SHiFT Codes from Game8
 
 on:
-  schedule:
-    - cron: '0 10 * * 3'
+  # Scheduled runs disabled 2026-07: Cloudflare began challenging GitHub Actions
+  # IPs around 2026-06-17, so game8.co returns a ~2KB challenge page instead of
+  # the article. Every scheduled run since has failed, and the source has not
+  # contributed a code since 2026-06-03. There is no API or key to authenticate
+  # with, so the workflow is manual-only until that changes — a weekly red X for
+  # an unfixable upstream block is noise, not signal.
+  #
+  # To retry: run manually from the Actions tab. The script still exits 1 on the
+  # challenge page, which is the correct behaviour for a deliberate manual run.
   workflow_dispatch:
 
 permissions:

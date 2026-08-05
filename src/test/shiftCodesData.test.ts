@@ -54,13 +54,21 @@ describe("embedded shiftCodes dataset", () => {
     expect(bad).toEqual([]);
   });
 
-  it("has no entry claiming to be active past its own expiry", () => {
-    const now = Date.now();
+  it("has no active entry whose expiry predates its own addedAt", () => {
+    // Deliberately time-independent. An "expired before it was even recorded"
+    // entry is corruption; an entry that merely lapsed since is normal, and
+    // getEffectiveStatus() already downgrades it at render time. Comparing
+    // against Date.now() here would make CI fail spontaneously the day any
+    // legitimately-active code lapsed, which would also block the scraper
+    // workflows that run this suite before committing.
     const bad = mockShiftCodes
-      .filter((c) => c.status === "active" && c.expiresAt != null && Date.parse(c.expiresAt) < now)
-      .map((c) => `${c.id}: status=active expiresAt=${c.expiresAt}`);
-    // getEffectiveStatus() auto-expires these at render time, but the stored
-    // status should not contradict the stored date.
+      .filter(
+        (c) =>
+          c.status === "active" &&
+          c.expiresAt != null &&
+          Date.parse(c.expiresAt) < Date.parse(`${c.addedAt}T00:00:00Z`),
+      )
+      .map((c) => `${c.id}: added ${c.addedAt}, expires ${c.expiresAt}`);
     expect(bad).toEqual([]);
   });
 
