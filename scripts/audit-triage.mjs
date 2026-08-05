@@ -18,6 +18,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
 /**
  * Advisories consciously accepted, with the reason they cannot affect this app.
@@ -40,8 +41,6 @@ const ACCEPTED = [
     reviewed: '2026-02-10',
   },
 ];
-
-const acceptedById = new Map(ACCEPTED.map((a) => [a.id, a]));
 
 function runAudit() {
   // A constant command string: there is no interpolated input anywhere here, so there
@@ -89,55 +88,102 @@ function collectAdvisories(report) {
   return found;
 }
 
-const report = JSON.parse(runAudit());
+/**
+ * Decide the outcome for one npm audit report. Pure, so every branch is testable
+ * against a synthetic report with no network and no npm.
+ *
+ * That matters more here than usual: the two real bugs this script has had so far
+ * (a crash spawning npm, and parsing npm's own error envelope as "zero
+ * vulnerabilities") both lived in branches that could only be reached by hand.
+ *
+ * Returns `{ ok, fatal, accepted, unexpected, stale }`. `fatal` is set when the
+ * report itself is unusable, which must never be mistaken for a clean result.
+ */
+export function evaluateAudit(report, accepted = ACCEPTED) {
+  const byId = new Map(accepted.map((a) => [a.id, a]));
 
-// npm reports its own failures as a well-formed JSON envelope with an `error` key and
-// no `vulnerabilities`. Parsing that as "nothing found" would turn a broken audit into
-// a green check — the single worst outcome for a security gate — so treat it as fatal.
-if (report.error) {
-  console.error('FAIL: npm audit did not run.');
-  console.error(`  ${report.error.code ?? 'unknown'}: ${report.error.summary ?? ''}`);
-  if (report.error.detail) console.error(`  ${report.error.detail}`);
-  process.exit(1);
-}
-if (typeof report.vulnerabilities !== 'object' || report.vulnerabilities === null) {
-  console.error('FAIL: npm audit returned no `vulnerabilities` field; the output format may have changed.');
-  console.error(`  received keys: ${Object.keys(report).join(', ') || '(none)'}`);
-  process.exit(1);
-}
-
-const found = collectAdvisories(report);
-
-const unexpected = [...found.values()].filter((a) => !acceptedById.has(a.id));
-const stale = ACCEPTED.filter((a) => !found.has(a.id));
-
-for (const advisory of found.values()) {
-  const accepted = acceptedById.get(advisory.id);
-  if (!accepted) continue;
-  console.log(`accepted  ${advisory.id}  ${advisory.module} (${advisory.severity})`);
-  console.log(`          ${accepted.reason}`);
-  console.log(`          verify: ${accepted.verify}`);
-  console.log(`          last reviewed: ${accepted.reviewed}`);
-}
-
-if (unexpected.length > 0) {
-  console.error(`\nFAIL: ${unexpected.length} untriaged advisory/advisories in production dependencies:`);
-  for (const a of unexpected) {
-    console.error(`  ${a.severity.toUpperCase()}  ${a.module}  ${a.id}  ${a.title}`);
-    console.error(`         ${a.url}`);
+  // npm reports its own failures as a well-formed JSON envelope with an `error` key
+  // and no `vulnerabilities`. Reading that as "nothing found" would turn a broken
+  // audit into a green check — the worst possible outcome for a security gate.
+  if (report?.error) {
+    return {
+      ok: false,
+      fatal: `npm audit did not run. ${report.error.code ?? 'unknown'}: ${report.error.summary ?? ''}`.trim(),
+      accepted: [],
+      unexpected: [],
+      stale: [],
+    };
   }
-  console.error('\nFix the dependency, or add a justified entry to ACCEPTED in scripts/audit-triage.mjs.');
-}
-
-if (stale.length > 0) {
-  console.error(`\nFAIL: ${stale.length} accepted advisory/advisories no longer reported:`);
-  for (const a of stale) {
-    console.error(`  ${a.id} (${a.module}) — resolved or renamed. Remove it from ACCEPTED.`);
+  if (typeof report?.vulnerabilities !== 'object' || report.vulnerabilities === null) {
+    return {
+      ok: false,
+      fatal:
+        'npm audit returned no `vulnerabilities` field; the output format may have changed. ' +
+        `Received keys: ${Object.keys(report ?? {}).join(', ') || '(none)'}`,
+      accepted: [],
+      unexpected: [],
+      stale: [],
+    };
   }
+
+  const found = collectAdvisories(report);
+  const unexpected = [...found.values()].filter((a) => !byId.has(a.id));
+  const stale = accepted.filter((a) => !found.has(a.id));
+  const matched = [...found.values()]
+    .filter((a) => byId.has(a.id))
+    .map((a) => ({ ...a, acceptance: byId.get(a.id) }));
+
+  return {
+    ok: unexpected.length === 0 && stale.length === 0,
+    fatal: null,
+    accepted: matched,
+    unexpected,
+    stale,
+  };
 }
 
-if (unexpected.length > 0 || stale.length > 0) process.exit(1);
+function report_() {
+  const result = evaluateAudit(JSON.parse(runAudit()));
 
-console.log(
-  `\nOK: ${found.size} production advisory/advisories, all triaged and documented (0 untriaged).`,
-);
+  if (result.fatal) {
+    console.error(`FAIL: ${result.fatal}`);
+    return 1;
+  }
+
+  for (const advisory of result.accepted) {
+    console.log(`accepted  ${advisory.id}  ${advisory.module} (${advisory.severity})`);
+    console.log(`          ${advisory.acceptance.reason}`);
+    console.log(`          verify: ${advisory.acceptance.verify}`);
+    console.log(`          last reviewed: ${advisory.acceptance.reviewed}`);
+  }
+
+  if (result.unexpected.length > 0) {
+    console.error(
+      `\nFAIL: ${result.unexpected.length} untriaged advisory/advisories in production dependencies:`,
+    );
+    for (const a of result.unexpected) {
+      console.error(`  ${String(a.severity).toUpperCase()}  ${a.module}  ${a.id}  ${a.title}`);
+      console.error(`         ${a.url}`);
+    }
+    console.error('\nFix the dependency, or add a justified entry to ACCEPTED in scripts/audit-triage.mjs.');
+  }
+
+  if (result.stale.length > 0) {
+    console.error(`\nFAIL: ${result.stale.length} accepted advisory/advisories no longer reported:`);
+    for (const a of result.stale) {
+      console.error(`  ${a.id} (${a.module}) — resolved or renamed. Remove it from ACCEPTED.`);
+    }
+  }
+
+  if (!result.ok) return 1;
+
+  console.log(
+    `\nOK: ${result.accepted.length} production advisory/advisories, all triaged and documented (0 untriaged).`,
+  );
+  return 0;
+}
+
+// Only run when invoked directly, so the module can be imported by tests.
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  process.exit(report_());
+}

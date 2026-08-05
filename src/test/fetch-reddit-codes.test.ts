@@ -533,6 +533,25 @@ describe("assessRunHealth false positives", () => {
   it("treats an ordinary low failure rate as healthy", () => {
     expect(assessRunHealth({ ...base, postsSeen: 80, postsSkipped: 3 }).level).toBe("ok");
   });
+
+  it("warns when many posts discuss codes but none were extracted", () => {
+    // Covers the rot mode every candidate-based branch is blind to: if
+    // SHIFT_CODE_REGEX itself stops matching, candidates fall to zero alongside
+    // codes and nothing above fires. This counter is measured independently.
+    const verdict = assessRunHealth({ ...base, postsMentioningCodes: 12 });
+    expect(verdict.level).toBe("warn");
+    expect(verdict.message).toMatch(/mention SHiFT codes/i);
+  });
+
+  it("does not warn on a quiet day with few code mentions", () => {
+    expect(assessRunHealth({ ...base, postsMentioningCodes: 3 }).level).toBe("ok");
+  });
+
+  it("does not warn when codes were extracted, however many mentions there were", () => {
+    expect(
+      assessRunHealth({ ...base, postsMentioningCodes: 50, codesExtracted: 7 }).level,
+    ).toBe("ok");
+  });
 });
 
 describe("tallyPosts (counters that drive assessRunHealth)", () => {
@@ -553,15 +572,78 @@ describe("tallyPosts (counters that drive assessRunHealth)", () => {
     expect(tally.codes[0].keys).toBeUndefined();
   });
 
-  it("counts code-shaped posts even when extraction throws", () => {
-    // Candidacy is counted before extraction on purpose. Counting it only on
-    // success made the "candidates but no codes" guard unreachable, because a
-    // successful extraction of a candidate always yields at least one code.
+  it("keeps an implausible count out of the user-visible reward label too", () => {
+    // Dropping `keys` while still rendering "4294967296 Golden Keys" would just move
+    // the bad data somewhere more visible — the label is what the card displays.
+    const posts = [
+      { id: "1", title: `FREE 4294967296 golden keys ${REAL}`, selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.codes).toHaveLength(1);
+    expect(tally.codes[0].keys).toBeUndefined();
+    expect(tally.codes[0].reward).toBe("Golden Keys");
+    expect(tally.codes[0].reward).not.toMatch(/\d/);
+  });
+
+  it("keeps a plausible count in both the field and the label", () => {
+    const posts = [
+      { id: "1", title: `5 golden keys ${REAL}`, selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.codes[0].keys).toBe(5);
+    expect(tally.codes[0].reward).toBe("5 Golden Keys");
+  });
+
+  it("counts a code-shaped post as a candidate even when extraction throws", () => {
+    // The regression this guards: counting candidacy only after a successful
+    // extraction made the "candidates but no codes" health check unreachable,
+    // because extracting from a candidate always yields at least one code. The
+    // oversized subreddit name below forces assertValidCodeShape to reject the
+    // generated id, which is the one deterministic way to make extraction throw.
     const posts = [
       { id: "1", title: `code ${REAL}`, selftext: "", created_utc: now() },
     ];
-    const tally = tallyPosts(posts, "Borderlands4");
+    const tally = tallyPosts(posts, "B".repeat(120));
+    expect(tally.postsSkipped).toBe(1);
+    expect(tally.codes).toHaveLength(0);
+    // The point of the test: candidacy survives the failure.
     expect(tally.postsWithCandidates).toBe(1);
+  });
+
+  it("produces stats that can actually trip the breakage verdict", () => {
+    // Ties the counters to the guard they feed. If tallyPosts ever stops counting
+    // candidates independently of extraction, this stops reaching 'error'.
+    const posts = Array.from({ length: 6 }, (_, i) => ({
+      id: String(i),
+      title: `code ${REAL}`,
+      selftext: "",
+      created_utc: now(),
+    }));
+    const tally = tallyPosts(posts, "B".repeat(120));
+    const verdict = assessRunHealth({
+      anyReachable: true,
+      subredditsWithPosts: 4,
+      postsSeen: tally.postsSeen,
+      postsSkipped: tally.postsSkipped,
+      postsWithCandidates: tally.postsWithCandidates,
+      postsMentioningCodes: tally.postsMentioningCodes,
+      codesExtracted: tally.codes.length,
+    });
+    expect(verdict.level).toBe("error");
+  });
+
+  it("counts posts that mention codes using a rule independent of the extractor", () => {
+    // This counter exists precisely for the case where SHIFT_CODE_REGEX stops
+    // matching: candidate counts collapse with code counts, so a signal that
+    // shares the pattern goes quiet exactly when it is needed.
+    const posts = [
+      { id: "1", title: "Anyone got a working SHiFT code?", selftext: "", created_utc: now() },
+      { id: "2", title: "Free golden keys today?", selftext: "", created_utc: now() },
+      { id: "3", title: "Best Moze build for Mayhem 10", selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.postsMentioningCodes).toBe(2);
+    expect(tally.postsWithCandidates).toBe(0);
   });
 
   it("counts a genuine code post as both candidate and extraction", () => {

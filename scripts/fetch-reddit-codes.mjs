@@ -133,13 +133,32 @@ function extractKeyCount(text) {
   return match ? parseInt(match[1], 10) : 1;
 }
 
+/**
+ * A key count we are willing to publish.
+ *
+ * assertValidCodeShape caps `keys` at 99, and giveaway posts routinely advertise
+ * quantities far beyond that ("FREE 999999999 golden keys"). Returns undefined for
+ * anything implausible so callers can fall back rather than propagate spam.
+ *
+ * Both the `keys` field and the human-readable reward label go through here. They
+ * used to disagree: dropping an implausible `keys` value while still rendering
+ * "4294967296 Golden Keys" in the UI simply moved the bad data somewhere more
+ * visible, since the label is what the card actually shows.
+ */
+function plausibleKeyCount(count) {
+  return Number.isInteger(count) && count >= 1 && count <= 99 ? count : undefined;
+}
+
 function extractRewardLabel(text) {
   const normalizedText = normalizeText(text, '');
   const keyMatch = normalizedText.match(/(\d+)\s*(golden|skeleton|diamond)?\s*keys?/i);
   if (keyMatch) {
-    const count = keyMatch[1];
     const type = keyMatch[2]?.toLowerCase() || 'golden';
-    return `${count} ${type.charAt(0).toUpperCase() + type.slice(1)} Key${parseInt(count) > 1 ? 's' : ''}`;
+    const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+    const count = plausibleKeyCount(Number.parseInt(keyMatch[1], 10));
+    // Implausible quantity: keep the reward *type*, drop the unbelievable number.
+    if (count === undefined) return `${typeLabel} Keys`;
+    return `${count} ${typeLabel} Key${count > 1 ? 's' : ''}`;
   }
   if (/skin|head|outfit/i.test(normalizedText)) return 'Cosmetic Reward';
   if (/weapon|gun|legendary/i.test(normalizedText)) return 'Weapon Reward';
@@ -427,13 +446,11 @@ function extractCodesFromPost(post, subreddit) {
 
   const game = detectGame(combinedText, subreddit);
   const rewardType = detectRewardType(combinedText);
-  const keyCount = extractKeyCount(combinedText);
   // A post can advertise an implausible quantity ("Giveaway: 100 golden keys!")
   // alongside a perfectly real code. assertValidCodeShape caps keys at 99, and
   // letting that reject the whole entry silently discarded the code itself.
   // Dropping just the unreliable count keeps the code, which is the valuable part.
-  const plausibleKeyCount =
-    Number.isInteger(keyCount) && keyCount >= 1 && keyCount <= 99 ? keyCount : undefined;
+  const keyCount = plausibleKeyCount(extractKeyCount(combinedText));
   const expiresAt = parseExpiration(combinedText, postDateObj);
   const reward = extractRewardLabel(combinedText);
 
@@ -450,7 +467,7 @@ function extractCodesFromPost(post, subreddit) {
       status: 'unknown',
       reward,
       rewardType,
-      keys: rewardType.endsWith('-keys') ? plausibleKeyCount : undefined,
+      keys: rewardType.endsWith('-keys') ? keyCount : undefined,
       expiresAt,
       source: `r/${normalizedSubreddit}`,
       addedAt: postDate,
@@ -571,6 +588,28 @@ function postHasCodeCandidate(post) {
 }
 
 /**
+ * Does this post *talk about* SHiFT codes, judged without the extraction rule?
+ *
+ * Sharing SHIFT_CODE_REGEX is mandatory for postHasCodeCandidate (see above) but it
+ * creates a blind spot: if that pattern or its acceptance rule ever stops matching
+ * real codes, candidate counts collapse to zero alongside code counts and every
+ * "codes present but none extracted" guard goes quiet at precisely the moment it is
+ * needed. This signal is deliberately independent — plain keywords plus a much looser
+ * group shape (3+ short alphanumeric runs, no digit requirement, no length rule) — so
+ * it survives changes that break the strict pattern.
+ *
+ * It is only ever a warning. Posts asking "anyone got a working shift code?" are
+ * common, so a high mention count with no extractions is suspicious, not conclusive.
+ */
+export function postMentionsCodeLikeText(post) {
+  if (!post || typeof post !== 'object') return false;
+  const combinedText = `${normalizeText(post.title, '')} ${normalizeText(post.selftext, '')}`;
+  if (/\bshift\s*codes?\b/i.test(combinedText)) return true;
+  if (/\b(golden|skeleton|diamond)\s*keys?\b/i.test(combinedText)) return true;
+  return /\b[A-Za-z0-9]{4,6}(?:-[A-Za-z0-9]{4,6}){2,}\b/.test(combinedText);
+}
+
+/**
  * Minimum posts before "every post threw" is treated as evidence of breakage.
  *
  * With one or two posts it is not evidence at all: a single legitimately-rejected
@@ -586,8 +625,26 @@ const MIN_POSTS_FOR_BREAKAGE_VERDICT = 5;
  * A threshold rather than a moved counter is what keeps this guard both reachable
  * and quiet: one rejected giveaway cannot trip it, but a genuine extraction
  * regression produces many candidate posts and no codes at all.
+ *
+ * Scope, stated honestly: `postHasCodeCandidate` shares SHIFT_CODE_REGEX with the
+ * extractor by design, so a candidate always yields a code unless extraction
+ * *throws*. This branch therefore detects throw-rot, not "the regex stopped
+ * matching" — if the pattern itself drifts, candidates fall to zero along with
+ * codes and nothing here fires. MIN_MENTIONS_FOR_EXTRACTION_WARNING below exists
+ * because of that gap.
  */
 const MIN_CANDIDATES_FOR_BREAKAGE_VERDICT = 5;
+
+/**
+ * Posts that talk about SHiFT codes, before "we extracted none" is worth a warning.
+ *
+ * This one is deliberately measured with a *different* rule than the extractor
+ * (see postMentionsCodeLikeText), which is the whole point: a signal that shares
+ * the extraction pattern fails silently in exactly the cases where extraction
+ * fails. Kept as a warning rather than an error because a subreddit genuinely can
+ * discuss codes on a day nobody posts one.
+ */
+const MIN_MENTIONS_FOR_EXTRACTION_WARNING = 8;
 
 /**
  * Share of posts that may fail extraction before the run is considered broken.
@@ -616,6 +673,7 @@ function assessRunHealth(stats) {
     postsSeen,
     postsSkipped,
     postsWithCandidates,
+    postsMentioningCodes = 0,
     codesExtracted,
   } = stats;
 
@@ -664,6 +722,17 @@ function assessRunHealth(stats) {
     };
   }
 
+  // Independent of the extraction pattern, so it still speaks up when the pattern
+  // itself is what broke — the case every candidate-based branch above goes blind to.
+  if (postsMentioningCodes >= MIN_MENTIONS_FOR_EXTRACTION_WARNING && codesExtracted === 0) {
+    return {
+      level: 'warn',
+      message:
+        `${postsMentioningCodes} post(s) mention SHiFT codes or keys but zero codes were extracted. ` +
+        'That can be a quiet day, or the code pattern no longer matches what Reddit is posting.',
+    };
+  }
+
   return { level: 'ok', message: `Scanned ${postsSeen} post(s) across ${subredditsWithPosts} subreddit(s).` };
 }
 
@@ -679,6 +748,7 @@ export function tallyPosts(posts, subreddit) {
   let postsSeen = 0;
   let postsSkipped = 0;
   let postsWithCandidates = 0;
+  let postsMentioningCodes = 0;
   const warnings = [];
 
   for (const post of posts) {
@@ -689,6 +759,9 @@ export function tallyPosts(posts, subreddit) {
     // condition could never hold and silent extraction rot became undetectable.
     // The false alarm it was meant to fix is handled by a threshold instead.
     if (postHasCodeCandidate(post)) postsWithCandidates++;
+    // Measured with a rule independent of the extractor, so it still registers
+    // when the strict pattern is what broke.
+    if (postMentionsCodeLikeText(post)) postsMentioningCodes++;
     // Isolate per post: assertValidCodeShape() throws on implausible values.
     // Without this, one bad post aborted every remaining post in the subreddit.
     try {
@@ -699,7 +772,7 @@ export function tallyPosts(posts, subreddit) {
     }
   }
 
-  return { codes, postsSeen, postsSkipped, postsWithCandidates, warnings };
+  return { codes, postsSeen, postsSkipped, postsWithCandidates, postsMentioningCodes, warnings };
 }
 
 // ── Main ───────────────────────────────────────────────────────────
@@ -715,6 +788,7 @@ async function main() {
   let postsSeen = 0;
   let postsSkipped = 0;
   let postsWithCandidates = 0;
+  let postsMentioningCodes = 0;
 
   for (const subreddit of SUBREDDITS) {
     console.log(`\n📂 r/${subreddit}`);
@@ -728,6 +802,7 @@ async function main() {
       postsSeen += tally.postsSeen;
       postsSkipped += tally.postsSkipped;
       postsWithCandidates += tally.postsWithCandidates;
+      postsMentioningCodes += tally.postsMentioningCodes;
       for (const warning of tally.warnings) console.warn(`  ⚠️  ${warning}`);
 
       // Be polite to the upstream services between subreddits.
@@ -746,6 +821,7 @@ async function main() {
     postsSeen,
     postsSkipped,
     postsWithCandidates,
+    postsMentioningCodes,
     codesExtracted: allCodes.length,
   });
 
@@ -758,6 +834,12 @@ async function main() {
     console.error(`::error::${health.message}`);
     process.exitCode = 1;
     return;
+  }
+
+  // A warning annotates the run and keeps going: the signal is suggestive, not
+  // conclusive, and stopping here would discard codes that did extract.
+  if (health.level === 'warn') {
+    console.warn(`::warning::${health.message}`);
   }
 
   // 2. Deduplicate per (code, game) rather than per code alone.

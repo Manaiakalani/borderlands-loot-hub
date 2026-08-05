@@ -11,10 +11,17 @@ import { readFileSync } from 'node:fs';
 
 const BASE = '/borderlands-loot-hub';
 
-const captureExpression = (() => {
+/**
+ * The entire inline <script> from 404.html, not just one expression.
+ *
+ * An earlier version of this suite extracted only the `const path = ...` line and
+ * re-implemented the base-path guard in the test itself, which meant that guard was
+ * never actually exercised — deleting it from the shipped file kept the suite green.
+ */
+const redirectScript = (() => {
   const html = readFileSync('public/404.html', 'utf-8');
-  const match = html.match(/const path = ([^;]+);/);
-  if (!match) throw new Error('public/404.html no longer assigns `const path = ...`');
+  const match = html.match(/<script>([\s\S]*?)<\/script>/);
+  if (!match) throw new Error('public/404.html no longer contains an inline <script>');
   return match[1];
 })();
 
@@ -29,20 +36,31 @@ const roundTrip = (pathname: string, search = '', hash = '') => {
     removeItem: (k: string) => { delete store[k]; },
   };
 
+  let replacedWith: string | null = null;
   let restoredUrl: string | null = null;
   const windowStub = {
-    location: { pathname, search, hash },
+    location: {
+      pathname,
+      search,
+      hash,
+      replace: (url: string) => { replacedWith = url; },
+    },
     history: { replaceState: (_s: unknown, _t: unknown, url: string) => { restoredUrl = url; } },
   };
 
-  const captured = new Function('window', `return ${captureExpression}`)(windowStub) as string;
-  if (windowStub.location.pathname.startsWith(BASE)) sessionStorage.setItem('redirect', captured);
+  // Run the real 404.html script exactly as the browser would.
+  new Function('window', 'sessionStorage', redirectScript)(windowStub, sessionStorage);
+
+  // Captured here on purpose: restore-route.js clears the key once it has read it,
+  // so reading it after the round trip would always be undefined and any assertion
+  // about what 404.html stored would pass regardless of what the shipped file does.
+  const stored = store.redirect;
 
   // The browser then loads the SPA at the repo root, where restore-route.js runs.
-  windowStub.location = { pathname: `${BASE}/`, search: '', hash: '' };
+  windowStub.location = { pathname: `${BASE}/`, search: '', hash: '', replace: () => {} };
   new Function('sessionStorage', 'window', restoreSource)(sessionStorage, windowStub);
 
-  return { restoredUrl: restoredUrl ?? `${BASE}/`, stored: store.redirect };
+  return { restoredUrl: restoredUrl ?? `${BASE}/`, stored, replacedWith };
 };
 
 describe('GitHub Pages deep-link restoration', () => {
@@ -87,6 +105,20 @@ describe('GitHub Pages deep-link restoration', () => {
   });
 
   it('ignores paths outside the repo base', () => {
-    expect(roundTrip('/somewhere-else').stored).toBeUndefined();
+    const result = roundTrip('/somewhere-else');
+    // Nothing outside the app's own base path should ever be handed to the router.
+    expect(result.stored).toBeUndefined();
+    expect(result.restoredUrl).toBe(`${BASE}/`);
+    // The shipped script must still send the visitor to the app root.
+    expect(result.replacedWith).toBe(`${BASE}/`);
+  });
+
+  it('stores the in-app route it captured', () => {
+    // Asserts on what 404.html actually wrote, before restore-route.js consumes it.
+    expect(roundTrip(`${BASE}/about`, '?a=1', '#b').stored).toBe(`${BASE}/about?a=1#b`);
+  });
+
+  it('always redirects to the repo root', () => {
+    expect(roundTrip(`${BASE}/about`).replacedWith).toBe(`${BASE}/`);
   });
 });
