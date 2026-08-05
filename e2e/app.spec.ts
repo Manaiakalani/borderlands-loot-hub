@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
-
-const BASE_URL = 'http://localhost:4173/borderlands-loot-hub/';
+import { BASE_URL, isAllowedRequestUrl } from './e2e-config.mjs';
 
 test.describe('Borderlands SHiFT Vault E2E', () => {
   test('dashboard loads and displays codes', async ({ page }) => {
@@ -71,12 +70,7 @@ test.describe('Borderlands SHiFT Vault E2E', () => {
   test('only expected third-party origins are contacted', async ({ page }) => {
     // Analytics is intentionally enabled (see the Privacy page). This test guards
     // against *unexpected* third parties creeping in, and pins the analytics host.
-    const ALLOWED_ORIGINS = [
-      'https://analytics.manaiakalani.info',
-      'https://fonts.googleapis.com',
-      'https://fonts.gstatic.com',
-    ];
-
+    // The allowlist is shared with the Puppeteer smoke test and mirrors the CSP.
     const external: string[] = [];
     page.on('request', (req) => {
       const url = req.url();
@@ -87,9 +81,7 @@ test.describe('Borderlands SHiFT Vault E2E', () => {
     await page.goto(BASE_URL);
     await page.waitForLoadState('networkidle');
 
-    const unexpected = external.filter(
-      (u) => !ALLOWED_ORIGINS.some((origin) => u.startsWith(origin))
-    );
+    const unexpected = external.filter((u) => !isAllowedRequestUrl(u));
     expect(unexpected, `Unexpected third-party requests: ${unexpected.join(', ')}`).toHaveLength(0);
   });
 

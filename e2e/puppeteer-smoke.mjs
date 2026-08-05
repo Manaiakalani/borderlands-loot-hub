@@ -4,8 +4,8 @@
  * Requires production build served on localhost:4173
  */
 import puppeteer from 'puppeteer';
+import { BASE_URL as BASE, isAllowedRequestUrl } from './e2e-config.mjs';
 
-const BASE = 'http://localhost:4173/borderlands-loot-hub/';
 let browser, page;
 const results = [];
 
@@ -41,12 +41,7 @@ async function testDashboardLoads() {
 // Google Fonts. Assert an origin allowlist instead of "no analytics": that still
 // catches an unexpected third-party tracker being introduced, without failing on
 // the origins we deliberately ship.
-// Keep this in sync with nginx.conf's CSP and the allowlist in e2e/app.spec.ts.
-const ALLOWED_THIRD_PARTY_ORIGINS = [
-  'https://analytics.manaiakalani.info',
-  'https://fonts.googleapis.com',
-  'https://fonts.gstatic.com',
-];
+// The allowlist lives in e2e/allowed-origins.mjs and mirrors nginx.conf's CSP.
 
 async function testNoUnexpectedThirdParties() {
   const requests = [];
@@ -57,9 +52,7 @@ async function testNoUnexpectedThirdParties() {
     }
   });
   await page.goto(BASE, { waitUntil: 'networkidle0' });
-  const unexpected = requests.filter(
-    u => !ALLOWED_THIRD_PARTY_ORIGINS.some(origin => u.startsWith(origin))
-  );
+  const unexpected = requests.filter(u => !isAllowedRequestUrl(u));
   if (unexpected.length > 0) {
     console.error(`    unexpected origins: ${unexpected.join(', ')}`);
   }
@@ -77,16 +70,25 @@ async function testMobileNoOverflow() {
   assert(scrollWidth <= clientWidth + 1, 'No horizontal overflow at 390px');
 }
 
+// Assert on the page's own heading, not on body text: the header nav links to
+// About and Privacy from every route, so `body.textContent.includes('About')`
+// passes even when the route silently falls through to the dashboard.
+async function assertRouteHeading(path, pattern, name) {
+  await page.goto(BASE + path, { waitUntil: 'networkidle0' });
+  const headings = await page.$$eval('h1, h2', els => els.map(el => el.textContent.trim()));
+  const matched = headings.some(h => pattern.test(h));
+  if (!matched) {
+    console.error(`    headings found: ${JSON.stringify(headings)}`);
+  }
+  assert(matched, name);
+}
+
 async function testAboutRoute() {
-  await page.goto(BASE + 'about', { waitUntil: 'networkidle0' });
-  const text = await page.$eval('body', el => el.textContent);
-  assert(text.includes('About'), 'About page renders');
+  await assertRouteHeading('about', /About\s+SHiFT Vault/i, 'About page renders its own heading');
 }
 
 async function testPrivacyRoute() {
-  await page.goto(BASE + 'privacy', { waitUntil: 'networkidle0' });
-  const text = await page.$eval('body', el => el.textContent);
-  assert(text.includes('Privacy'), 'Privacy page renders');
+  await assertRouteHeading('privacy', /Privacy Policy/i, 'Privacy page renders its own heading');
 }
 
 async function test404Route() {

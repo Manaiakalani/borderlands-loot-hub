@@ -49,22 +49,25 @@ jobs:
       - name: End-to-end tests (Playwright)
         run: npx playwright test
 
-      # The Puppeteer script expects a server already on :4173, so start one here.
-      # Keeping the server and the test in a single step avoids relying on a
-      # backgrounded process surviving between steps, and redirecting its output
-      # stops the step from hanging on an open stdout pipe.
+      # The Puppeteer script expects a server already on the E2E port (see
+      # e2e/e2e-config.mjs), so start one here. Keeping the server and the test in
+      # a single step avoids relying on a backgrounded process surviving between
+      # steps, and redirecting its output stops the step from hanging on an open
+      # stdout pipe.
       - name: End-to-end smoke tests (Puppeteer)
         run: |
-          npm run preview > preview.log 2>&1 &
+          port="$(node -e "import('./e2e/e2e-config.mjs').then(m => console.log(m.PREVIEW_PORT))")"
+          url="http://localhost:${port}/borderlands-loot-hub/"
+          npm run preview -- --port "$port" --strictPort > preview.log 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           for _ in $(seq 1 60); do
-            if curl -sfo /dev/null http://localhost:4173/borderlands-loot-hub/; then
+            if curl -sfo /dev/null "$url"; then
               break
             fi
             sleep 1
           done
-          if ! curl -sfo /dev/null http://localhost:4173/borderlands-loot-hub/; then
+          if ! curl -sfo /dev/null "$url"; then
             echo "Preview server did not start within 60s." >&2
             cat preview.log >&2
             exit 1
@@ -76,5 +79,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
           retention-days: 7

@@ -7,6 +7,9 @@ import {
   extractRewardLabel,
   parseExpiration,
   extractCodesFromPost,
+  generateCodeEntry,
+  dedupeCodes,
+  MAX_NEW_CODES_PER_RUN,
 } from "../../scripts/fetch-reddit-codes.mjs";
 
 describe("fetch-reddit-codes parsing", () => {
@@ -65,12 +68,10 @@ describe("fetch-reddit-codes parsing", () => {
   });
 
   it("parses 'until MM/DD' format", () => {
-    const currentYear = new Date().getFullYear();
-    const result = parseExpiration("until 7/31");
-    expect(result).toMatch(/^\d{4}-07-31$/);
-    const year = parseInt(result.split('-')[0], 10);
-    expect(year).toBeGreaterThanOrEqual(currentYear);
-    expect(year).toBeLessThanOrEqual(currentYear + 1);
+    // Pin the post date instead of using "now": with a relative date this test
+    // silently changes meaning depending on the month the suite runs in.
+    const post = new Date(2026, 6, 1); // 2026-07-01, so 7/31 is still ahead
+    expect(parseExpiration("until 7/31", post)).toBe("2026-07-31");
   });
 
   // Regression: `new Date('Dec 31')` yields year 2001 in V8, which silently
@@ -99,6 +100,40 @@ describe("fetch-reddit-codes parsing", () => {
   it("still honours an explicit year in month-name form", () => {
     const post = new Date(2026, 5, 15);
     expect(parseExpiration("expires Dec 31, 2026", post)).toBe("2026-12-31");
+  });
+
+  // Regression: the next-year bump used to fire for ANY date >60 days before the
+  // post, so "expires May 1" in an August post became 2027-05-01 — a code that
+  // died 3 months ago was published with a 9-month-future expiry and rendered as
+  // live. Refusing to claim an expiry is the honest outcome.
+  it("does not invent a future expiry for a date that already passed", () => {
+    const august = new Date(2026, 7, 4);
+    expect(parseExpiration("expires May 1", august)).toBeNull();
+    expect(parseExpiration("expires Jun 5", august)).toBeNull();
+    expect(parseExpiration("expires 6/5", august)).toBeNull();
+  });
+
+  it("still resolves a genuine year rollover to the next year", () => {
+    const december = new Date(2026, 11, 20);
+    expect(parseExpiration("expires Jan 5", december)).toBe("2027-01-05");
+    expect(parseExpiration("expires 1/15", december)).toBe("2027-01-15");
+  });
+
+  it("keeps a yearless date in the post's year when it is still ahead", () => {
+    const august = new Date(2026, 7, 4);
+    expect(parseExpiration("expires Aug 20", august)).toBe("2026-08-20");
+    expect(parseExpiration("expires Sep 1", august)).toBe("2026-09-01");
+  });
+
+  it("never returns a date more than a year after the post", () => {
+    const post = new Date(2026, 7, 4);
+    const oneYearOut = new Date(2027, 7, 4).getTime();
+    for (const text of ["expires Jan 5", "expires May 1", "expires 1/1", "expires Dec 31"]) {
+      const result = parseExpiration(text, post);
+      if (result) {
+        expect(new Date(`${result}T00:00:00`).getTime()).toBeLessThanOrEqual(oneYearOut);
+      }
+    }
   });
 
   // Regression: post bodies were truncated to 300 chars before code extraction,
@@ -171,5 +206,106 @@ describe("fetch-reddit-codes parsing", () => {
   it("returns no codes for a post with no SHiFT code", () => {
     const post = { title: "BL4 discussion", selftext: "no codes here", created_utc: 0, ups: 1 };
     expect(extractCodesFromPost(post, "Borderlands4")).toHaveLength(0);
+  });
+});
+
+describe("dedupeCodes", () => {
+  const make = (code, game, upvotes, postDate) => ({ code, game, upvotes, postDate });
+
+  it("keeps the same code once per game rather than collapsing to one entry", () => {
+    // The same code is routinely posted for several titles, and the UI filters by
+    // game, so collapsing on code alone silently dropped the other games.
+    const result = dedupeCodes([
+      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL3", 5, "2026-06-01"),
+      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 3, "2026-06-01"),
+    ]);
+    expect(result).toHaveLength(2);
+    expect(result.map(c => c.game).sort()).toEqual(["BL3", "BL4"]);
+  });
+
+  it("collapses repeat sightings of the same code and game, keeping the most upvoted", () => {
+    const result = dedupeCodes([
+      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 2, "2026-06-01"),
+      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 90, "2026-06-01"),
+      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 7, "2026-06-01"),
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].upvotes).toBe(90);
+  });
+
+  it("orders results newest first so a per-run cap keeps the freshest codes", () => {
+    const result = dedupeCodes([
+      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 1, "2026-01-01"),
+      make("FFFFF-GGGGG-HHHHH-JJJJJ-KKKKK", "BL4", 1, "2026-09-01"),
+      make("LLLLL-MMMMM-NNNNN-PPPPP-QQQQQ", "BL4", 1, "2026-05-01"),
+    ]);
+    expect(result.map(c => c.postDate)).toEqual(["2026-09-01", "2026-05-01", "2026-01-01"]);
+  });
+
+  it("returns nothing for no input", () => {
+    expect(dedupeCodes([])).toEqual([]);
+  });
+});
+
+describe("generateCodeEntry", () => {
+  const base = {
+    code: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE",
+    game: "BL4",
+    reward: "1 Golden Key",
+    rewardType: "golden-keys",
+    keys: 1,
+    subreddit: "Borderlands4",
+    postDate: "2026-06-01",
+    expiresAt: null,
+    isUniversal: false,
+  };
+
+  it("derives the id from the whole code, not a prefix plus a loop index", () => {
+    // Index-based ids collided across runs because the index resets each run,
+    // and a 5-char prefix is not unique.
+    const a = generateCodeEntry({ ...base, code: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" }, 0);
+    const b = generateCodeEntry({ ...base, code: "AAAAA-ZZZZZ-YYYYY-XXXXX-WWWWW" }, 0);
+    const idOf = entry => entry.match(/id: '([^']+)'/)[1];
+    expect(idOf(a)).not.toBe(idOf(b));
+    expect(idOf(a)).toBe("reddit-bl4-aaaaabbbbbcccccdddddeeeee");
+  });
+
+  it("never claims a scraped code was verified", () => {
+    expect(generateCodeEntry(base, 0)).not.toContain("lastVerifiedAt");
+  });
+
+  it("treats a date-only expiry as end of the local day, matching isCodeExpired", () => {
+    // A code expiring today is still redeemable today. Comparing against UTC
+    // midnight would mark it expired a day early.
+    const today = new Date();
+    const iso = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0"),
+    ].join("-");
+    expect(generateCodeEntry({ ...base, expiresAt: iso }, 0)).toContain("status: 'unknown'");
+  });
+
+  it("marks a genuinely past expiry as expired", () => {
+    expect(generateCodeEntry({ ...base, expiresAt: "2020-01-01" }, 0)).toContain("status: 'expired'");
+  });
+
+  it("emits an entry that parses back to the values it was given", () => {
+    const entry = generateCodeEntry({ ...base, expiresAt: null }, 0);
+    expect(entry).toContain("code: 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'");
+    expect(entry).toContain("game: 'BL4'");
+    expect(entry).toContain("source: 'r/Borderlands4'");
+    expect(entry).toContain("addedAt: '2026-06-01'");
+    expect(entry).toContain("expiresAt: null");
+  });
+});
+
+describe("MAX_NEW_CODES_PER_RUN", () => {
+  it("is a small positive bound on what one unattended run can commit", () => {
+    // These commits land on main without review, so the blast radius of a spam
+    // or malformed feed has to stay bounded.
+    expect(Number.isInteger(MAX_NEW_CODES_PER_RUN)).toBe(true);
+    expect(MAX_NEW_CODES_PER_RUN).toBeGreaterThan(0);
+    expect(MAX_NEW_CODES_PER_RUN).toBeLessThanOrEqual(50);
   });
 });

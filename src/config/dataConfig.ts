@@ -13,13 +13,28 @@
 /** Public JSON endpoint, injected at build time. Empty string means "use embedded data". */
 const REMOTE_DATA_SOURCE_URL = (import.meta.env?.VITE_DATA_SOURCE_URL ?? '').trim();
 
+/**
+ * Derive the remote-source settings from a raw env value.
+ * Exported so the derivation can be tested against real inputs rather than only
+ * against the one value this build happens to have been compiled with.
+ */
+export function deriveDataSource(rawUrl: string | undefined | null): {
+  useRemote: boolean;
+  url: string;
+} {
+  const url = (rawUrl ?? '').trim();
+  return { useRemote: url.length > 0, url };
+}
+
+const derived = deriveDataSource(REMOTE_DATA_SOURCE_URL);
+
 export const DATA_CONFIG = {
   /**
    * Whether to fetch data from a remote source.
    * Derived from VITE_DATA_SOURCE_URL so the documented setting can't silently
    * do nothing.
    */
-  USE_REMOTE_DATA: REMOTE_DATA_SOURCE_URL.length > 0,
+  USE_REMOTE_DATA: derived.useRemote,
 
   /**
    * Remote data source URL, from VITE_DATA_SOURCE_URL.
@@ -28,7 +43,7 @@ export const DATA_CONFIG = {
    * - JSONBin: 'https://api.jsonbin.io/v3/b/<bin-id>/latest'
    * - Your own API: 'https://api.example.com/shift-codes'
    */
-  DATA_SOURCE_URL: REMOTE_DATA_SOURCE_URL,
+  DATA_SOURCE_URL: derived.url,
 
   /**
    * Cache duration in milliseconds

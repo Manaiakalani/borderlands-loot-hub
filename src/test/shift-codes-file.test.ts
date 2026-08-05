@@ -145,6 +145,37 @@ describe("shift-codes-file helper", () => {
 
     expect(sanitizeText("  hello\u0000world  ", { maxLength: 20 })).toBe("hello world");
   });
+
+  it("rejects date fields that are not real calendar dates", () => {
+    // The generators interpolate date fields into TypeScript without
+    // escapeTsString, so a quote here would break out of the string literal.
+    const base = {
+      id: 'date-1',
+      code: 'ABCDE-FGHIJ-KLMNO-PQRST-UVWXY',
+      game: 'BL4',
+      status: 'active',
+      reward: 'reward',
+      rewardType: 'golden-keys',
+      source: 'test',
+      addedAt: '2026-06-01',
+    };
+
+    expect(() => assertValidCodeShape({ ...base, expiresAt: "', evil: '" })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: 'soon' })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-13-01' })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-02-30' })).toThrow(/expiresAt/i);
+    expect(() => assertValidCodeShape({ ...base, expiresAt: '2026-02-29' })).toThrow(/expiresAt/i); // 2026 is not a leap year
+    expect(() => assertValidCodeShape({ ...base, lastVerifiedAt: 'yesterday' })).toThrow(/lastVerifiedAt/i);
+    expect(() => assertValidCodeShape({ ...base, addedAt: '2026-6-1' })).toThrow(/addedAt/i);
+    expect(() => assertValidCodeShape({ ...base, addedAt: 20260601 })).toThrow(/addedAt/i);
+
+    // Formats the scrapers legitimately produce must still pass.
+    expect(assertValidCodeShape({ ...base, expiresAt: '2028-02-29' })).toBe(true); // 2028 is a leap year
+    expect(assertValidCodeShape({ ...base, expiresAt: null })).toBe(true);
+    expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31' })).toBe(true);
+    expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31T23:59:59' })).toBe(true);
+    expect(assertValidCodeShape({ ...base, expiresAt: '2026-12-31T23:59:59.000Z' })).toBe(true);
+  });
 });
 
 const PRUNE_FILE = `${ARRAY_ANCHOR}

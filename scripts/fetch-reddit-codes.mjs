@@ -128,6 +128,35 @@ function extractRewardLabel(text) {
   return 'SHiFT Reward';
 }
 
+/**
+ * Decide which year a yearless date ("Dec 31", "6/5") refers to, relative to the
+ * post that mentioned it.
+ *
+ * SHiFT codes expire days-to-weeks after they are posted, so a yearless date is
+ * only read as *next* year when that lands shortly after the post (the genuine
+ * Dec-post/Jan-expiry rollover). A date that sits well before the post is far more
+ * likely to be a regex false positive than a reference ~10 months out, so we
+ * return null and let the caller claim no expiry at all. Fabricating a future
+ * date there would mark an already-dead code as live for months.
+ *
+ * @returns {Date|null} the resolved date, or null if the year can't be trusted
+ */
+function resolveYearlessDate(anchored, postDateObj) {
+  if (isNaN(anchored.getTime())) return null;
+
+  // Allow a day of slack so a same-day expiry isn't pushed a year out.
+  const graceMs = 24 * 60 * 60 * 1000;
+  if (anchored.getTime() >= postDateObj.getTime() - graceMs) return anchored;
+
+  const bumped = new Date(anchored);
+  bumped.setFullYear(anchored.getFullYear() + 1);
+
+  const ROLLOVER_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+  if (bumped.getTime() - postDateObj.getTime() <= ROLLOVER_WINDOW_MS) return bumped;
+
+  return null;
+}
+
 function parseExpiration(text, postDateObj = new Date()) {
   const normalizedText = normalizeText(text, '');
   const patterns = [
@@ -151,23 +180,16 @@ function parseExpiration(text, postDateObj = new Date()) {
           const month = parseInt(slashParts[0], 10) - 1;
           const day = parseInt(slashParts[1], 10);
           if (month < 0 || month > 11 || day < 1 || day > 31) continue;
-          parsed = new Date(currentYear, month, day);
-          // Only bump year if the date is more than 60 days before the post
-          // (likely refers to next year, e.g. Dec post with Jan expiry)
-          const diffMs = postDateObj.getTime() - parsed.getTime();
-          if (diffMs > 60 * 24 * 60 * 60 * 1000) {
-            parsed.setFullYear(currentYear + 1);
-          }
+          parsed = resolveYearlessDate(new Date(currentYear, month, day), postDateObj);
+          if (!parsed) continue;
         } else if (!hasExplicitYear) {
           // Month-name form without a year, e.g. "Dec 31". `new Date('Dec 31')`
           // silently yields year 2001 in V8, which would expire the code instantly.
-          // Anchor to the post's year, then apply the same next-year bump rule.
-          parsed = new Date(`${raw} ${currentYear}`);
-          if (isNaN(parsed.getTime())) continue;
-          const diffMs = postDateObj.getTime() - parsed.getTime();
-          if (diffMs > 60 * 24 * 60 * 60 * 1000) {
-            parsed.setFullYear(currentYear + 1);
-          }
+          // Anchor to the post's year, then resolve the year the same way.
+          const anchored = new Date(`${raw} ${currentYear}`);
+          if (isNaN(anchored.getTime())) continue;
+          parsed = resolveYearlessDate(anchored, postDateObj);
+          if (!parsed) continue;
         } else {
           parsed = new Date(raw);
           if (isNaN(parsed.getTime())) continue;
@@ -175,10 +197,12 @@ function parseExpiration(text, postDateObj = new Date()) {
 
         if (isNaN(parsed.getTime())) continue;
 
-        // Reject dates more than 1 year in the future (likely misparse)
+        // Reject dates more than 1 year in the future (likely misparse).
+        // `continue` rather than `return null` so a later pattern still gets a
+        // chance to match a valid date elsewhere in the same post.
         const oneYearAhead = new Date(postDateObj);
         oneYearAhead.setFullYear(oneYearAhead.getFullYear() + 1);
-        if (parsed > oneYearAhead) return null;
+        if (parsed > oneYearAhead) continue;
 
         // Format as YYYY-MM-DD using local date parts (not UTC)
         const y = parsed.getFullYear();
@@ -396,6 +420,26 @@ function readExistingCodes() {
   return { existingCodeStrings: extractExistingCodeStrings(content), fileContent: content };
 }
 
+/**
+ * Collapse duplicate sightings, keeping the most-upvoted one.
+ *
+ * Keyed per (code, game) rather than per code alone: the same code is frequently
+ * posted for multiple titles, and collapsing on code discarded the per-game
+ * entries the UI filters on.
+ */
+function dedupeCodes(codes) {
+  const codeMap = new Map();
+  for (const code of codes) {
+    const key = `${code.code}::${code.game}`;
+    const existing = codeMap.get(key);
+    if (!existing || code.upvotes > existing.upvotes) {
+      codeMap.set(key, code);
+    }
+  }
+  return Array.from(codeMap.values())
+    .sort((a, b) => new Date(b.postDate) - new Date(a.postDate));
+}
+
 function generateCodeEntry(code, index) {
   // Derive the ID from the full code (not a 5-char prefix + loop index), because the
   // index resets every run — two different codes sharing a prefix would collide.
@@ -444,6 +488,8 @@ async function main() {
   // 1. Fetch posts from all subreddits (RSS primary, PullPush fallback)
   const allCodes = [];
   let anyReachable = false;
+  let postsSeen = 0;
+  let postsSkipped = 0;
 
   for (const subreddit of SUBREDDITS) {
     console.log(`\n📂 r/${subreddit}`);
@@ -452,12 +498,14 @@ async function main() {
       if (reachable) anyReachable = true;
 
       for (const post of posts) {
+        postsSeen++;
         // Isolate per post: assertValidCodeShape() throws on implausible values
         // (e.g. a post claiming "100 keys"). Without this, one bad post aborted
         // every remaining post in the subreddit.
         try {
           allCodes.push(...extractCodesFromPost(post, subreddit));
         } catch (error) {
+          postsSkipped++;
           console.warn(`  ⚠️  Skipping post ${post?.id ?? '<unknown>'}: ${error.message}`);
         }
       }
@@ -479,19 +527,20 @@ async function main() {
     return;
   }
 
-  // 2. Deduplicate per (code, game) rather than per code alone. The same code is
-  //    frequently posted for multiple titles, and collapsing on code discarded
-  //    the per-game entries the UI filters on. Keep the most-upvoted sighting.
-  const codeMap = new Map();
-  for (const code of allCodes) {
-    const key = `${code.code}::${code.game}`;
-    const existing = codeMap.get(key);
-    if (!existing || code.upvotes > existing.upvotes) {
-      codeMap.set(key, code);
-    }
+  // Reaching posts but failing to parse *every* one is a systemic breakage (a feed
+  // format change, say), not the "no new codes today" case. Without this it exits
+  // 0 with a green check and the scraper can silently rot for weeks.
+  if (postsSkipped > 0 && postsSkipped === postsSeen) {
+    console.error(
+      `::error::Extraction failed for all ${postsSeen} posts fetched. ` +
+        'This usually means the feed format changed.',
+    );
+    process.exitCode = 1;
+    return;
   }
-  const uniqueCodes = Array.from(codeMap.values())
-    .sort((a, b) => new Date(b.postDate) - new Date(a.postDate));
+
+  // 2. Deduplicate per (code, game) rather than per code alone.
+  const uniqueCodes = dedupeCodes(allCodes);
 
   console.log(`\n📊 Total unique codes found: ${uniqueCodes.length}`);
 
@@ -536,7 +585,11 @@ export {
   extractKeyCount,
   extractRewardLabel,
   parseExpiration,
+  resolveYearlessDate,
   extractCodesFromPost,
+  generateCodeEntry,
+  dedupeCodes,
+  MAX_NEW_CODES_PER_RUN,
 };
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;

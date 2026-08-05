@@ -287,7 +287,7 @@ export const CodeCard = memo(function CodeCard({ code, isNew, isRecent }: CodeCa
           
           {/* Never expires indicator for active codes without expiry */}
           {!code.expiresAt && code.status === 'active' && (
-            <span className="text-xs text-success/70 flex items-center gap-1">
+            <span className="text-xs text-success flex items-center gap-1">
               <Clock className="w-3 h-3" />
               No expiration (permanent)
             </span>

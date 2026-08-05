@@ -15,9 +15,9 @@ const About = memo(() => {
                 <Key className="w-8 h-8 text-vault-gold" aria-hidden="true" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-vault-gold tracking-tight">
+                <span className="block text-2xl font-bold text-vault-gold tracking-tight">
                   SHiFT Vault
-                </h1>
+                </span>
                 <p className="text-xs text-slate-400">Borderlands Code Hub</p>
               </div>
             </Link>

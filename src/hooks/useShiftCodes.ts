@@ -328,14 +328,17 @@ export function useShiftCodes() {
   const checkStaleness = useCallback(() => {
     if (codes.length === 0) return;
 
+    const now = Date.now();
     let newest = 0;
     for (const code of codes) {
       const t = parseLocalDate(code.addedAt).getTime();
-      if (!Number.isNaN(t) && t > newest) newest = t;
+      // Ignore future dates: a typo'd or mis-parsed addedAt would otherwise make
+      // the data look permanently fresh and suppress the warning for good.
+      if (!Number.isNaN(t) && t <= now && t > newest) newest = t;
     }
 
     if (newest === 0) return;
-    setIsStale(Date.now() - newest > DATA_CONFIG.STALE_THRESHOLD_MS);
+    setIsStale(now - newest > DATA_CONFIG.STALE_THRESHOLD_MS);
   }, [codes]);
 
   /**

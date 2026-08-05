@@ -162,7 +162,7 @@ async function fetchGame8Codes() {
       source: 'game8.co',
       addedAt: today,
       lastVerifiedAt: today,
-      expiresAt: isExpired ? expiresAt : expiresAt,
+      expiresAt,
       isUniversal: true,
     });
   }
@@ -237,7 +237,7 @@ async function main() {
     status: '${code.status}',
     reward: '${escapeTsString(code.reward)}',
     rewardType: '${code.rewardType}',${code.keys ? `\n    keys: ${code.keys},` : ''}
-    source: '${code.source}',
+    source: '${escapeTsString(code.source)}',
     addedAt: '${code.addedAt}',
     lastVerifiedAt: '${code.lastVerifiedAt}',
     expiresAt: ${code.expiresAt ? `'${code.expiresAt}'` : 'null'},

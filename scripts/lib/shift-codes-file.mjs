@@ -48,6 +48,25 @@ export function sanitizeText(value, { maxLength = 200, fallback = '' } = {}) {
   return cleaned.length > maxLength ? cleaned.slice(0, maxLength) : cleaned || fallback;
 }
 
+/**
+ * Accepts `YYYY-MM-DD`, optionally with an ISO time component, and rejects
+ * calendar-invalid values like `2026-13-45`.
+ *
+ * This is load-bearing, not cosmetic: the fetch scripts interpolate date fields
+ * into the generated TypeScript *without* escapeTsString, so this validator is
+ * the only thing standing between a malformed date and the source file.
+ */
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+function isValidIsoDate(value) {
+  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value)) return false;
+  const [y, m, d] = value.slice(0, 10).split('-').map(Number);
+  const parsed = new Date(Date.UTC(y, m - 1, d));
+  return (
+    parsed.getUTCFullYear() === y && parsed.getUTCMonth() === m - 1 && parsed.getUTCDate() === d
+  );
+}
+
 export function assertValidCodeShape(code) {
   if (!code || typeof code !== 'object') {
     throw new Error('Expected a code object.');
@@ -82,11 +101,11 @@ export function assertValidCodeShape(code) {
     throw new Error(`Invalid key count: ${candidate.keys}`);
   }
 
-  if (candidate.expiresAt !== undefined && candidate.expiresAt !== null && typeof candidate.expiresAt !== 'string') {
+  if (candidate.expiresAt !== undefined && candidate.expiresAt !== null && !isValidIsoDate(candidate.expiresAt)) {
     throw new Error(`Invalid expiresAt: ${candidate.expiresAt}`);
   }
 
-  if (candidate.lastVerifiedAt !== undefined && candidate.lastVerifiedAt !== null && typeof candidate.lastVerifiedAt !== 'string') {
+  if (candidate.lastVerifiedAt !== undefined && candidate.lastVerifiedAt !== null && !isValidIsoDate(candidate.lastVerifiedAt)) {
     throw new Error(`Invalid lastVerifiedAt: ${candidate.lastVerifiedAt}`);
   }
 
@@ -94,7 +113,7 @@ export function assertValidCodeShape(code) {
     throw new Error(`Invalid source: ${candidate.source}`);
   }
 
-  if (typeof candidate.addedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(candidate.addedAt)) {
+  if (!isValidIsoDate(candidate.addedAt) || candidate.addedAt.length !== 10) {
     throw new Error(`Invalid addedAt: ${candidate.addedAt}`);
   }
 
