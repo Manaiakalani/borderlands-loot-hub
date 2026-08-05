@@ -207,7 +207,11 @@ export function insertEntriesAfterAnchor(content, entriesBlock, expectedNewCount
 
   const before = countCodeEntries(content);
   const normalised = entriesBlock.replace(/^\n+/, '').replace(/\n+$/, '');
-  const updated = content.replace(ARRAY_ANCHOR, `${ARRAY_ANCHOR}\n${normalised}\n`);
+  // Replacer *function*, never a replacement string: `$&`, `$\``, `$'` and `$$`
+  // are special inside a replacement string, so a scraped field containing them
+  // would splice surrounding file content into the generated source. `$` is
+  // legitimate in reward text ("$5 off"), so it must not be escaped away either.
+  const updated = content.replace(ARRAY_ANCHOR, () => `${ARRAY_ANCHOR}\n${normalised}\n`);
 
   assertValidShiftCodesFile(updated);
 

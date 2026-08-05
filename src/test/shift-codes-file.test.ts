@@ -270,3 +270,60 @@ describe("pruneExpiredCodes", () => {
     expect(content).toBe(PRUNE_FILE);
   });
 });
+
+describe("insertEntriesAfterAnchor: $ patterns in scraped fields", () => {
+  // String.replace treats $&, $` , $' and $$ as special *in the replacement
+  // string*. Because the entry block is scraped content, a reward field
+  // containing one of them spliced surrounding file content into the generated
+  // source. $` injected ~2.2KB and produced invalid TypeScript.
+  const buildFile = (entries = "") =>
+    [
+      "export interface ShiftCode { id: string; }",
+      "export const mockShiftCodes: ShiftCode[] = [",
+      entries,
+      "];",
+      "",
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
+
+  const entryWith = (reward: string) =>
+    [
+      "  {",
+      "    id: 'bl4-test-20260101',",
+      "    code: 'ABCDE-ABCDE-ABCDE-ABCDE-ABCD1',",
+      "    game: 'BL4',",
+      `    reward: '${reward}',`,
+      "    rewardType: 'golden-keys',",
+      "    keys: 5,",
+      "    status: 'active',",
+      "    addedAt: '2026-01-01',",
+      "    expiresAt: null,",
+      "    source: 'test',",
+      "  },",
+    ].join("\n");
+
+  it.each([["$&"], ["$`"], ["$'"], ["$$"]])(
+    "does not splice file content when a reward contains %s",
+    (payload) => {
+      const content = buildFile();
+      const entry = entryWith(escapeTsString(`5 Golden Keys ${payload}`));
+      const updated = insertEntriesAfterAnchor(content, entry, 1);
+
+      // The file may only grow by the entry itself (plus the two newlines the
+      // helper adds). Anything larger means surrounding content was injected.
+      expect(updated.length - content.length).toBeLessThanOrEqual(entry.length + 2);
+      expect(updated).toContain("5 Golden Keys");
+      // The array anchor must still appear exactly once.
+      expect(updated.split("export const mockShiftCodes").length - 1).toBe(1);
+    },
+  );
+
+  it("keeps a literal $ in the reward text rather than escaping it away", () => {
+    // $ is legitimate in scraped reward copy, so the fix must live in the
+    // replacement call, not in escapeTsString.
+    const content = buildFile();
+    const entry = entryWith(escapeTsString("Save $5 on 5 Golden Keys"));
+    expect(insertEntriesAfterAnchor(content, entry, 1)).toContain("Save $5 on 5 Golden Keys");
+  });
+});

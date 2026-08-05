@@ -12,6 +12,9 @@ import {
   applyPerRunCap,
   assessRunHealth,
   postHasCodeCandidate,
+  looksLikeShiftCode,
+  isAtomFeedBody,
+  tallyPosts,
   MAX_NEW_CODES_PER_RUN,
 } from "../../scripts/fetch-reddit-codes.mjs";
 
@@ -147,12 +150,12 @@ describe("fetch-reddit-codes parsing", () => {
     const post = {
       id: "p1",
       title: "BL4 codes",
-      selftext: `${preamble} WXYZA-BCDEF-GHIJK-LMNOP-QRSTU`,
+      selftext: `${preamble} WXYZ4-BCDEF-GHIJK-LMNOP-QRSTU`,
       created_utc: Math.floor(Date.UTC(2026, 5, 15, 12) / 1000),
       ups: 10,
     };
     const codes = extractCodesFromPost(post, "borderlands4");
-    expect(codes.map(c => c.code)).toContain("WXYZA-BCDEF-GHIJK-LMNOP-QRSTU");
+    expect(codes.map(c => c.code)).toContain("WXYZ4-BCDEF-GHIJK-LMNOP-QRSTU");
   });
 
   it("extracts every code from a multi-code post", () => {
@@ -160,9 +163,9 @@ describe("fetch-reddit-codes parsing", () => {
       id: "p2",
       title: "Three codes",
       selftext:
-        "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE and " +
-        "FFFFF-GGGGG-HHHHH-JJJJJ-KKKKK and " +
-        "LLLLL-MMMMM-NNNNN-PPPPP-QQQQQ",
+        "AAAA1-BBBBB-CCCCC-DDDDD-EEEEE and " +
+        "FFFF2-GGGGG-HHHHH-JJJJJ-KKKKK and " +
+        "LLLL3-MMMMM-NNNNN-PPPPP-QQQQQ",
       created_utc: Math.floor(Date.UTC(2026, 5, 15, 12) / 1000),
       ups: 5,
     };
@@ -176,7 +179,7 @@ describe("fetch-reddit-codes parsing", () => {
     const post = {
       id: "p3",
       title: "A code",
-      selftext: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE",
+      selftext: "AAAA1-BBBBB-CCCCC-DDDDD-EEEEE",
       created_utc: Math.floor(Date.UTC(2026, 5, 15, 12) / 1000),
       ups: 1,
     };
@@ -194,13 +197,13 @@ describe("fetch-reddit-codes parsing", () => {
   it("extracts a SHiFT code from a post with the detected game", () => {
     const post = {
       title: "BL4",
-      selftext: "Code: ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ — 3 golden keys",
+      selftext: "Code: ZZZZ9-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ — 3 golden keys",
       created_utc: Math.floor(new Date("2026-06-01T12:00:00Z").getTime() / 1000),
       ups: 42,
     };
     const codes = extractCodesFromPost(post, "Borderlands4");
     expect(codes).toHaveLength(1);
-    expect(codes[0].code).toBe("ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ");
+    expect(codes[0].code).toBe("ZZZZ9-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ");
     expect(codes[0].game).toBe("BL4");
     // Local date from UTC noon is June 1st in all reasonable timezones
     expect(codes[0].postDate).toBe("2026-06-01");
@@ -219,8 +222,8 @@ describe("dedupeCodes", () => {
     // The same code is routinely posted for several titles, and the UI filters by
     // game, so collapsing on code alone silently dropped the other games.
     const result = dedupeCodes([
-      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL3", 5, "2026-06-01"),
-      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 3, "2026-06-01"),
+      make("AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", "BL3", 5, "2026-06-01"),
+      make("AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 3, "2026-06-01"),
     ]);
     expect(result).toHaveLength(2);
     expect(result.map(c => c.game).sort()).toEqual(["BL3", "BL4"]);
@@ -228,9 +231,9 @@ describe("dedupeCodes", () => {
 
   it("collapses repeat sightings of the same code and game, keeping the most upvoted", () => {
     const result = dedupeCodes([
-      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 2, "2026-06-01"),
-      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 90, "2026-06-01"),
-      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 7, "2026-06-01"),
+      make("AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 2, "2026-06-01"),
+      make("AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 90, "2026-06-01"),
+      make("AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 7, "2026-06-01"),
     ]);
     expect(result).toHaveLength(1);
     expect(result[0].upvotes).toBe(90);
@@ -238,9 +241,9 @@ describe("dedupeCodes", () => {
 
   it("orders results newest first so a per-run cap keeps the freshest codes", () => {
     const result = dedupeCodes([
-      make("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 1, "2026-01-01"),
-      make("FFFFF-GGGGG-HHHHH-JJJJJ-KKKKK", "BL4", 1, "2026-09-01"),
-      make("LLLLL-MMMMM-NNNNN-PPPPP-QQQQQ", "BL4", 1, "2026-05-01"),
+      make("AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", "BL4", 1, "2026-01-01"),
+      make("FFFF2-GGGGG-HHHHH-JJJJJ-KKKKK", "BL4", 1, "2026-09-01"),
+      make("LLLL3-MMMMM-NNNNN-PPPPP-QQQQQ", "BL4", 1, "2026-05-01"),
     ]);
     expect(result.map(c => c.postDate)).toEqual(["2026-09-01", "2026-05-01", "2026-01-01"]);
   });
@@ -252,7 +255,7 @@ describe("dedupeCodes", () => {
 
 describe("generateCodeEntry", () => {
   const base = {
-    code: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE",
+    code: "AAAA1-BBBBB-CCCCC-DDDDD-EEEEE",
     game: "BL4",
     reward: "1 Golden Key",
     rewardType: "golden-keys",
@@ -266,11 +269,11 @@ describe("generateCodeEntry", () => {
   it("derives the id from the whole code, not a prefix plus a loop index", () => {
     // Index-based ids collided across runs because the index resets each run,
     // and a 5-char prefix is not unique.
-    const a = generateCodeEntry({ ...base, code: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE" }, 0);
-    const b = generateCodeEntry({ ...base, code: "AAAAA-ZZZZZ-YYYYY-XXXXX-WWWWW" }, 0);
+    const a = generateCodeEntry({ ...base, code: "AAAA1-BBBBB-CCCCC-DDDDD-EEEEE" }, 0);
+    const b = generateCodeEntry({ ...base, code: "AAAA5-ZZZZZ-YYYYY-XXXXX-WWWWW" }, 0);
     const idOf = entry => entry.match(/id: '([^']+)'/)[1];
     expect(idOf(a)).not.toBe(idOf(b));
-    expect(idOf(a)).toBe("reddit-bl4-aaaaabbbbbcccccdddddeeeee");
+    expect(idOf(a)).toBe("reddit-bl4-aaaa1bbbbbcccccdddddeeeee");
   });
 
   it("never claims a scraped code was verified", () => {
@@ -295,7 +298,7 @@ describe("generateCodeEntry", () => {
 
   it("emits an entry that parses back to the values it was given", () => {
     const entry = generateCodeEntry({ ...base, expiresAt: null }, 0);
-    expect(entry).toContain("code: 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'");
+    expect(entry).toContain("code: 'AAAA1-BBBBB-CCCCC-DDDDD-EEEEE'");
     expect(entry).toContain("game: 'BL4'");
     expect(entry).toContain("source: 'r/Borderlands4'");
     expect(entry).toContain("addedAt: '2026-06-01'");
@@ -403,8 +406,8 @@ describe("assessRunHealth", () => {
 
 describe("postHasCodeCandidate", () => {
   it("detects a code in the title or the body", () => {
-    expect(postHasCodeCandidate({ title: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", selftext: "" })).toBe(true);
-    expect(postHasCodeCandidate({ title: "hi", selftext: "ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ" })).toBe(true);
+    expect(postHasCodeCandidate({ title: "AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", selftext: "" })).toBe(true);
+    expect(postHasCodeCandidate({ title: "hi", selftext: "ZZZZ9-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ" })).toBe(true);
   });
 
   it("returns false for ordinary posts and malformed input", () => {
@@ -417,9 +420,161 @@ describe("postHasCodeCandidate", () => {
   it("is not corrupted by the shared regex's lastIndex", () => {
     // SHIFT_CODE_REGEX is a module-level /g regex; .test() advances lastIndex, so
     // repeated calls silently returned false before lastIndex was reset.
-    const post = { title: "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE", selftext: "" };
+    const post = { title: "AAAA1-BBBBB-CCCCC-DDDDD-EEEEE", selftext: "" };
     expect(postHasCodeCandidate(post)).toBe(true);
     expect(postHasCodeCandidate(post)).toBe(true);
     expect(postHasCodeCandidate(post)).toBe(true);
+  });
+});
+
+describe("looksLikeShiftCode (hyphenated-prose false positives)", () => {
+  // SHIFT_CODE_REGEX is case-insensitive so a lowercase-typed code is still
+  // recovered, but that also matches chains of five-letter words.
+  it("rejects five-letter-word prose that matches the code shape", () => {
+    expect(looksLikeShiftCode("SUPER-CLEAN-WATER-THING-STUFF")).toBe(false);
+    expect(looksLikeShiftCode("CHECK-THESE-CODES-BELOW-GUIDE")).toBe(false);
+  });
+
+  it("accepts real codes, which always contain a digit", () => {
+    expect(looksLikeShiftCode("WZKJT-XRT9J-9JCWK-JJJ3B-Z9WHF")).toBe(true);
+  });
+
+  it("does not extract prose as a redeemable code", () => {
+    const post = {
+      title: "This is a super-clean-water-thing-stuff guide for BL4 golden keys",
+      selftext: "",
+      created_utc: Math.floor(Date.now() / 1000),
+    };
+    expect(extractCodesFromPost(post, "Borderlands4")).toHaveLength(0);
+  });
+
+  it("still extracts a genuine code from the same post shape", () => {
+    const post = {
+      title: "BL4 code WZKJT-XRT9J-9JCWK-JJJ3B-Z9WHF 1 golden key",
+      selftext: "",
+      created_utc: Math.floor(Date.now() / 1000),
+    };
+    expect(extractCodesFromPost(post, "Borderlands4")[0].code).toBe(
+      "WZKJT-XRT9J-9JCWK-JJJ3B-Z9WHF",
+    );
+  });
+
+  it("keeps postHasCodeCandidate in step with extraction", () => {
+    // If these disagree, a prose-only post counts as "codes present, none
+    // extracted" and assessRunHealth fails the run.
+    const prose = {
+      title: "a super-clean-water-thing-stuff post",
+      selftext: "",
+      created_utc: Math.floor(Date.now() / 1000),
+    };
+    expect(postHasCodeCandidate(prose)).toBe(false);
+    expect(extractCodesFromPost(prose, "Borderlands4")).toHaveLength(0);
+  });
+});
+
+describe("isAtomFeedBody (HTTP 200 challenge pages)", () => {
+  it("rejects an interstitial served with a 200 status", () => {
+    expect(isAtomFeedBody("<html><body>Just a moment...</body></html>")).toBe(false);
+  });
+
+  it("accepts a valid but empty feed, so a quiet subreddit stays reachable", () => {
+    expect(isAtomFeedBody('<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>')).toBe(true);
+  });
+
+  it("accepts a populated feed", () => {
+    expect(isAtomFeedBody("<feed><entry><title>x</title></entry></feed>")).toBe(true);
+  });
+
+  it("handles a non-string body without throwing", () => {
+    expect(isAtomFeedBody(undefined)).toBe(false);
+  });
+});
+
+describe("assessRunHealth false positives", () => {
+  const base = {
+    anyReachable: true,
+    subredditsWithPosts: 4,
+    postsSeen: 80,
+    postsSkipped: 0,
+    postsWithCandidates: 0,
+    codesExtracted: 0,
+  };
+
+  it("stays ok when a single giveaway post is legitimately rejected", () => {
+    // "100 golden keys" fails assertValidCodeShape by design. That is the guard
+    // working, not the extraction path breaking.
+    expect(assessRunHealth({ ...base, postsSkipped: 1 }).level).toBe("ok");
+  });
+
+  it("does not call breakage on a one-post sample where that post threw", () => {
+    expect(
+      assessRunHealth({ ...base, subredditsWithPosts: 1, postsSeen: 1, postsSkipped: 1 }).level,
+    ).toBe("ok");
+  });
+
+  it("still reports breakage once the sample is large enough", () => {
+    expect(assessRunHealth({ ...base, postsSeen: 80, postsSkipped: 80 }).level).toBe("error");
+  });
+
+  it("still reports breakage when real candidates yield nothing", () => {
+    expect(assessRunHealth({ ...base, postsWithCandidates: 5 }).level).toBe("error");
+  });
+});
+
+describe("tallyPosts (counters that drive assessRunHealth)", () => {
+  const now = () => Math.floor(Date.now() / 1000);
+  const REAL = "WZKJT-XRT9J-9JCWK-JJJ3B-Z9WHF";
+
+  it("does not count a rejected giveaway as a code candidate", () => {
+    // "100 golden keys" fails assertValidCodeShape by design. Counting it as a
+    // candidate would make assessRunHealth read the run as a silent extraction
+    // failure and turn the daily schedule red.
+    const posts = [
+      { id: "1", title: `Giveaway: 100 golden keys! ${REAL}`, selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.postsSkipped).toBe(1);
+    expect(tally.postsWithCandidates).toBe(0);
+    expect(tally.codes).toHaveLength(0);
+    expect(
+      assessRunHealth({
+        anyReachable: true,
+        subredditsWithPosts: 4,
+        postsSeen: 80,
+        postsSkipped: tally.postsSkipped,
+        postsWithCandidates: tally.postsWithCandidates,
+        codesExtracted: tally.codes.length,
+      }).level,
+    ).toBe("ok");
+  });
+
+  it("counts a genuine code post as both candidate and extraction", () => {
+    const posts = [
+      { id: "1", title: `BL4 code ${REAL} 1 golden key`, selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.postsSeen).toBe(1);
+    expect(tally.postsSkipped).toBe(0);
+    expect(tally.postsWithCandidates).toBe(1);
+    expect(tally.codes).toHaveLength(1);
+  });
+
+  it("keeps processing the remaining posts after one throws", () => {
+    const posts = [
+      { id: "1", title: `Giveaway: 100 golden keys! ${REAL}`, selftext: "", created_utc: now() },
+      { id: "2", title: "BL4 code AAAA1-BBBBB-CCCCC-DDDDD-EEEEE 1 golden key", selftext: "", created_utc: now() },
+    ];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally.postsSeen).toBe(2);
+    expect(tally.postsSkipped).toBe(1);
+    expect(tally.codes).toHaveLength(1);
+    expect(tally.warnings).toHaveLength(1);
+  });
+
+  it("ignores posts with no code-shaped text at all", () => {
+    const posts = [{ id: "1", title: "What is everyone farming today?", selftext: "", created_utc: now() }];
+    const tally = tallyPosts(posts, "Borderlands4");
+    expect(tally).toMatchObject({ postsSeen: 1, postsSkipped: 0, postsWithCandidates: 0 });
+    expect(tally.codes).toHaveLength(0);
   });
 });

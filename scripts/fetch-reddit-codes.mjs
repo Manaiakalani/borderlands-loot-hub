@@ -46,6 +46,24 @@ const SUBREDDITS = [
 // ── Patterns ───────────────────────────────────────────────────────
 const SHIFT_CODE_REGEX = /\b([A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5})\b/gi;
 
+/**
+ * Reject shapes that match SHIFT_CODE_REGEX but are really hyphenated prose.
+ *
+ * The regex is case-insensitive so that a code typed in lowercase is still
+ * recovered, but that also matches ordinary five-letter-word chains such as
+ * "super-clean-water-thing-stuff", which would then be published to users as a
+ * redeemable code.
+ *
+ * Requiring at least one digit separates the two: all 481 codes in the committed
+ * dataset contain a digit, and for a genuinely random 25-character base-36 code
+ * the chance of containing none is ~0.03%. Erring toward a missed code (which can
+ * be added by hand) rather than a fabricated one is the right trade for a feed
+ * that commits unattended.
+ */
+export function looksLikeShiftCode(code) {
+  return typeof code === 'string' && /[0-9]/.test(code);
+}
+
 const GAME_PATTERNS = {
   BL1: /\b(BL1|borderlands\s*1|borderlands\s*goty)\b/i,
   BL2: /\b(BL2|borderlands\s*2)\b/i,
@@ -246,6 +264,18 @@ function decodeEntities(str) {
 }
 
 /**
+ * Does this response body actually look like an Atom feed?
+ *
+ * Pure and exported so the "HTTP 200 challenge page" case is unit-testable.
+ * An empty-but-valid feed must still count as reachable — a quiet subreddit is
+ * not a broken one — so the `<feed` marker alone is sufficient.
+ */
+export function isAtomFeedBody(xml) {
+  if (typeof xml !== 'string') return false;
+  return xml.includes('<feed') || xml.includes('<entry>');
+}
+
+/**
  * Fetch posts from a subreddit's RSS feed. Returns normalised post objects
  * compatible with extractCodesFromPost().
  */
@@ -267,6 +297,21 @@ async function fetchSubredditRSS(subreddit, sort = 'new', limit = 100) {
   }
 
   const xml = await response.text();
+
+  // An HTTP 200 is not proof of success. A blocked datacentre IP can be served an
+  // interstitial/challenge page with a 200 status — exactly what happened to
+  // game8.co. Without this check a challenge page yields `reachable: true` with
+  // zero posts, which assessRunHealth escalates to a hard error, turning the
+  // daily schedule permanently red. Treat a non-feed body as "blocked" so the run
+  // soft-skips instead.
+  if (!isAtomFeedBody(xml)) {
+    console.warn(
+      `  ⚠️  RSS /r/${subreddit}/${sort}: HTTP 200 but the body is not an Atom feed ` +
+        `(${xml.length} bytes) — treating as blocked.`,
+    );
+    return { posts: [], reachable: false };
+  }
+
   const entries = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(m => m[1]);
 
   const posts = entries.map(entry => {
@@ -305,7 +350,13 @@ async function fetchSubredditPullPush(subreddit, size = 100) {
 
   try {
     const data = await response.json();
-    const posts = (data.data || []).map(p => ({
+    // Valid JSON is not proof of a valid payload: an error envelope such as
+    // {"error":"blocked"} would otherwise read as a reachable-but-empty source.
+    if (!Array.isArray(data?.data)) {
+      console.warn(`  ⚠️  PullPush r/${subreddit}: HTTP 200 but no "data" array — treating as blocked.`);
+      return { posts: [], reachable: false };
+    }
+    const posts = data.data.map(p => ({
       id: p.id,
       title: p.title || '',
       selftext: p.selftext || '',
@@ -367,7 +418,7 @@ function extractCodesFromPost(post, subreddit) {
   const selftext = normalizeText(post.selftext, '');
   const combinedText = `${title} ${selftext}`.trim();
   const matches = combinedText.match(SHIFT_CODE_REGEX) || [];
-  const uniqueCodes = [...new Set(matches.map(c => c.toUpperCase()))];
+  const uniqueCodes = [...new Set(matches.map(c => c.toUpperCase()))].filter(looksLikeShiftCode);
 
   const createdUtc = Number(post.created_utc);
   const postDateObj = Number.isFinite(createdUtc) && createdUtc > 0
@@ -506,16 +557,34 @@ function postHasCodeCandidate(post) {
   if (!post || typeof post !== 'object') return false;
   const combinedText = `${normalizeText(post.title, '')} ${normalizeText(post.selftext, '')}`;
   SHIFT_CODE_REGEX.lastIndex = 0;
-  return SHIFT_CODE_REGEX.test(combinedText);
+  const matches = combinedText.match(SHIFT_CODE_REGEX) || [];
+  // Must use the same acceptance rule as extractCodesFromPost. If this counted a
+  // match that extraction then filtered out, a post containing only hyphenated
+  // prose would register as "codes present, none extracted" and fail the run.
+  return matches.some(looksLikeShiftCode);
 }
+
+/**
+ * Minimum posts before "every post threw" is treated as evidence of breakage.
+ *
+ * With one or two posts it is not evidence at all: a single legitimately-rejected
+ * giveaway ("100 golden keys") would satisfy `postsSkipped === postsSeen` and turn
+ * the daily schedule red. A real format change affects the whole feed, so it still
+ * trips this at any realistic sample size.
+ */
+const MIN_POSTS_FOR_BREAKAGE_VERDICT = 5;
 
 /**
  * Decide whether a completed run was healthy, benignly empty, or systemically broken.
  *
  * Pure and exported so the failure modes are unit-testable without any network.
- * The previous guard (`postsSkipped === postsSeen`) was near-unreachable: a single
+ * The original guard (`postsSkipped === postsSeen`) was near-unreachable: a single
  * ordinary no-code post defeated it, and an HTTP 200 with malformed XML produced
  * `postsSeen === 0`, which sailed straight through as success.
+ *
+ * The bar for escalating to `error` is deliberately high. This runs unattended on a
+ * daily schedule, and an alert that cries wolf gets ignored — which is how the
+ * Game8 workflow's genuine failure went unnoticed for seven consecutive runs.
  */
 function assessRunHealth(stats) {
   const {
@@ -545,7 +614,7 @@ function assessRunHealth(stats) {
     };
   }
 
-  if (postsSeen > 0 && postsSkipped === postsSeen) {
+  if (postsSeen >= MIN_POSTS_FOR_BREAKAGE_VERDICT && postsSkipped === postsSeen) {
     return {
       level: 'error',
       message: `Extraction threw for all ${postsSeen} posts fetched. This usually means the feed format changed.`,
@@ -562,6 +631,42 @@ function assessRunHealth(stats) {
   }
 
   return { level: 'ok', message: `Scanned ${postsSeen} post(s) across ${subredditsWithPosts} subreddit(s).` };
+}
+
+/**
+ * Tally one subreddit's posts: extract codes and count what happened.
+ *
+ * Extracted out of main() and kept pure so the counting rules are unit-testable
+ * without any network. The counters feed assessRunHealth, so a miscount here is
+ * what turns a healthy run red (or hides a broken one).
+ */
+export function tallyPosts(posts, subreddit) {
+  const codes = [];
+  let postsSeen = 0;
+  let postsSkipped = 0;
+  let postsWithCandidates = 0;
+  const warnings = [];
+
+  for (const post of posts) {
+    postsSeen++;
+    const isCandidate = postHasCodeCandidate(post);
+    // Isolate per post: assertValidCodeShape() throws on implausible values
+    // (e.g. a post claiming "100 keys"). Without this, one bad post aborted
+    // every remaining post in the subreddit.
+    try {
+      codes.push(...extractCodesFromPost(post, subreddit));
+      // Only count a candidate whose extraction completed. A post that threw is
+      // already reported via postsSkipped; counting it here too would let a
+      // single legitimately-rejected giveaway ("100 golden keys") masquerade as
+      // a silent extraction failure and fail the whole run.
+      if (isCandidate) postsWithCandidates++;
+    } catch (error) {
+      postsSkipped++;
+      warnings.push(`Skipping post ${post?.id ?? '<unknown>'}: ${error.message}`);
+    }
+  }
+
+  return { codes, postsSeen, postsSkipped, postsWithCandidates, warnings };
 }
 
 // ── Main ───────────────────────────────────────────────────────────
@@ -585,19 +690,12 @@ async function main() {
       if (reachable) anyReachable = true;
       if (posts.length > 0) subredditsWithPosts++;
 
-      for (const post of posts) {
-        postsSeen++;
-        if (postHasCodeCandidate(post)) postsWithCandidates++;
-        // Isolate per post: assertValidCodeShape() throws on implausible values
-        // (e.g. a post claiming "100 keys"). Without this, one bad post aborted
-        // every remaining post in the subreddit.
-        try {
-          allCodes.push(...extractCodesFromPost(post, subreddit));
-        } catch (error) {
-          postsSkipped++;
-          console.warn(`  ⚠️  Skipping post ${post?.id ?? '<unknown>'}: ${error.message}`);
-        }
-      }
+      const tally = tallyPosts(posts, subreddit);
+      allCodes.push(...tally.codes);
+      postsSeen += tally.postsSeen;
+      postsSkipped += tally.postsSkipped;
+      postsWithCandidates += tally.postsWithCandidates;
+      for (const warning of tally.warnings) console.warn(`  ⚠️  ${warning}`);
 
       // Be polite to the upstream services between subreddits.
       await new Promise(r => setTimeout(r, 1500));

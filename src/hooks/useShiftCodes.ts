@@ -20,16 +20,29 @@ const fnv1a = (input: string): string => {
 /**
  * Content-sensitive revision of a code dataset.
  *
- * The previous revision was `length + firstId + lastId`, which could not see an
+ * The original revision was `length + firstId + lastId`, which could not see an
  * *edit* to an existing entry: correcting a wrong expiry date left the revision
  * unchanged, so returning visitors kept serving the bad value from cache for the
- * full 7-day window. Hashing the fields that drive rendering fixes that.
+ * full 7-day window.
+ *
+ * Every field is hashed rather than an enumerated subset. An explicit list is the
+ * same bug one level up — it silently stops covering any field added later, and a
+ * correction to that field would again be invisible to cached clients. Keys are
+ * sorted so the hash does not depend on literal property order.
  *
  * Exported for tests; the module computes it once for the embedded dataset.
  */
 export const computeEmbeddedRevision = (codes: readonly ShiftCode[]): string =>
   `${codes.length}-${fnv1a(
-    codes.map((c) => `${c.id}|${c.code}|${c.status}|${c.expiresAt ?? ''}|${c.addedAt}|${c.reward}`).join('\n'),
+    codes
+      .map((code) => {
+        const fields = code as unknown as Record<string, unknown>;
+        return Object.keys(fields)
+          .sort()
+          .map((key) => `${key}=${fields[key] ?? ''}`)
+          .join('|');
+      })
+      .join('\n'),
   )}`;
 
 const EMBEDDED_REVISION = computeEmbeddedRevision(mockShiftCodes);
