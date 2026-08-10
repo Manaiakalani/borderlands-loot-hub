@@ -25,22 +25,7 @@ import { pathToFileURL } from 'node:url';
  * `verify` is a human-checkable assertion, not a vibe — if it stops being true, the
  * entry must be removed and the dependency upgraded.
  */
-const ACCEPTED = [
-  {
-    id: 'GHSA-qwww-vcr4-c8h2',
-    module: 'react-router',
-    title: 'RSC Mode CSRF Bypass Allows Action Execution Before 400 Response',
-    reason:
-      'The vulnerability is reachable only through React Router RSC server request handlers ' +
-      '(matchRSCServerRequest / routeRSCServerRequest). This app ships a static bundle to ' +
-      'GitHub Pages with no server runtime of any kind, and uses only the declarative client ' +
-      'APIs: BrowserRouter, Routes, Route, Link. There is no server action to bypass CSRF on.',
-    verify:
-      'grep the src tree for RSC/server APIs — expected zero hits: ' +
-      'unstable_RSC, matchRSCServerRequest, routeRSCServerRequest, createRequestHandler',
-    reviewed: '2026-02-10',
-  },
-];
+const ACCEPTED = [];
 
 function runAudit() {
   // A constant command string: there is no interpolated input anywhere here, so there
