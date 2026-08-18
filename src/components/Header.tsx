@@ -58,10 +58,10 @@ export const Header = memo(function Header({
               <Key className="w-6 h-6 text-primary transition-transform duration-300 group-hover:rotate-12" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              <p className="text-2xl sm:text-3xl font-bold tracking-tight">
                 <span className="text-gradient-vault">SHiFT</span>
                 <span className="text-foreground"> Vault</span>
-              </h1>
+              </p>
               <p className="text-sm text-muted-foreground">
                 Borderlands SHiFT Code Aggregator
               </p>

@@ -101,6 +101,9 @@ const Index = () => {
       />
 
       <main className="flex-1 container py-6 space-y-6">
+        <h1 className="sr-only">
+          Borderlands SHiFT Vault — Golden Key and loot codes for BL1, BL2, BL3, BL4, Pre-Sequel, and Wonderlands
+        </h1>
         {/* Last fetched indicator */}
         {lastFetched && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground animate-fade-in">

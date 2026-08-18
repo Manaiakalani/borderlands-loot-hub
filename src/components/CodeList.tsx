@@ -28,7 +28,7 @@ export const CodeList = memo(function CodeList({ codes, isRecentFn }: CodeListPr
       {codes.map((code, index) => (
         <div
           key={code.id}
-          className="animate-fade-in"
+          className="animate-fade-in [content-visibility:auto] [contain-intrinsic-size:auto_22rem]"
           style={{ animationDelay: `${Math.min(index, 12) * 50}ms`, animationFillMode: 'backwards' }}
           role="listitem"
         >

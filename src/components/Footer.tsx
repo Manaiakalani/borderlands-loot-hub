@@ -61,6 +61,12 @@ export const Footer = memo(function Footer() {
             
             <div className="flex items-center gap-4">
               <Link
+                to="/about"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                About
+              </Link>
+              <Link
                 to="/privacy"
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
               >
