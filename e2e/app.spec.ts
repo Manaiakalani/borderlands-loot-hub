@@ -50,7 +50,7 @@ test.describe('Borderlands SHiFT Vault E2E', () => {
 
   test('navigation to About page works', async ({ page }) => {
     await page.goto(BASE_URL);
-    await page.getByRole('link', { name: /About/i }).click();
+    await page.getByRole('link', { name: 'About SHiFT Vault' }).click();
     await expect(page).toHaveURL(/\/about/);
     await expect(page.locator('h1:has-text("About")')).toBeVisible();
   });

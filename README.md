@@ -4,8 +4,8 @@
 
 ![Borderlands SHiFT Vault](https://img.shields.io/badge/Borderlands-SHiFT%20Vault-gold?style=for-the-badge&logo=playstation&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 
 **A sleek, Borderlands-themed SHiFT code aggregator for Vault Hunters**
 
@@ -18,6 +18,17 @@
 ## 📖 Overview
 
 SHiFT Vault is a modern web application that aggregates and displays SHiFT codes for all Borderlands games. Built with React and TypeScript, it features a custom Borderlands-inspired dark theme with vault gold accents, making it easy for Vault Hunters to find and redeem codes for Golden Keys and other rewards.
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/desktop-hero.png" alt="SHiFT Vault desktop hero with active Borderlands codes" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/game-filter.png" alt="Filtering SHiFT codes by Borderlands 4" width="720" />
+  <img src="docs/screenshots/mobile-view.png" alt="SHiFT Vault on a phone" width="280" />
+</p>
 
 ## ✨ Features
 
@@ -100,6 +111,8 @@ The app will be available at `http://localhost:5173`
 | `npm run lint` | Run ESLint |
 | `npm run test` | Run tests once |
 | `npm run test:watch` | Run tests in watch mode |
+| `npm run test:e2e` | Playwright end-to-end suite |
+| `npm run audit:ci` | Fail on any untriaged production `npm audit` advisory |
 
 ## 🏗️ Project Structure
 
@@ -149,14 +162,14 @@ scripts/
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/) with custom Borderlands theme
 - **UI Components:** [shadcn/ui](https://ui.shadcn.com/) (Radix primitives)
 - **Icons:** [Lucide React](https://lucide.dev/)
-- **State Management:** React Query + React hooks
+- **State Management:** React hooks with a 7-day local cache
 - **Routing:** React Router DOM (with lazy-loaded routes)
 - **Testing:** Vitest + Testing Library
 
 ## ⚡ Performance
 
 - **Code splitting** — Routes lazy-loaded with `React.lazy()` + `Suspense`
-- **Vendor chunking** — React, Radix UI, and React Query split into cacheable chunks
+- **Vendor chunking** — React and Radix UI split into cacheable chunks
 - **Memoized components** — `CodeCard`, `CodeList`, `FilterBar`, `NewTodaySection` wrapped in `React.memo`
 - **CSS-driven hover effects** — Uses `group-hover` instead of React state for zero re-renders
 - **Capped animation stagger** — Animation delays capped to prevent long delays on large lists
@@ -241,6 +254,13 @@ The Borderlands theme is defined in [src/index.css](src/index.css). Key CSS vari
   --warning: 45 95% 55%;      /* Unknown status */
 }
 ```
+
+## 📋 v1.4.0 Updates (August 2026)
+
+- Forced `nanoid` to **3.3.18**, closing Dependabot alert #41 (`GHSA-2v37-7h3g-55p8`) in production.
+- Landed the open Dependabot backlog (sonner, typescript-eslint, globals, postcss, puppeteer, jest-dom, eslint-plugin-react-refresh, @types/node).
+- Added Open Graph image, sitemap lastmod, screenshots, and grouped future npm Dependabot PRs.
+- Removed a dead React Query vendor chunk that no longer exists in the app.
 
 ## 🤝 Contributing
 
