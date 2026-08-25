@@ -20,6 +20,9 @@ updates:
         versions: [">=10.0.0"]
       - dependency-name: "tailwindcss"
         versions: [">=4.0.0"]
+      # typescript-eslint 8.x peers typescript <6.1.0. TS 7.0 has no compiler API.
+      - dependency-name: "typescript"
+        versions: [">=7"]
 
   - package-ecosystem: "docker"
     directory: "/"
