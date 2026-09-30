@@ -57,6 +57,22 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  */
 export const mockShiftCodes: ShiftCode[] = [
   // ============================================
+  // REDDIT - Auto-fetched Codes (2026-09-30)
+  // ============================================
+  {
+    id: 'reddit-bl4-3sx3j3xz55cr33cjbbjtxh395',
+    code: '3SX3J-3XZ55-CR33C-JBBJT-XH395',
+    game: 'BL4',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'cosmetic',
+    source: 'r/Borderlands4',
+    addedAt: '2026-09-29',
+    expiresAt: null,
+    isUniversal: false,
+  },
+
+  // ============================================
   // REDDIT - Auto-fetched Codes (2026-09-24)
   // ============================================
   {
