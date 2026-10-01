@@ -57,6 +57,36 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  */
 export const mockShiftCodes: ShiftCode[] = [
   // ============================================
+  // REDDIT - Auto-fetched Codes (2026-10-01)
+  // ============================================
+  {
+    id: 'reddit-bl4-cskjj63xz6bskhksbbjjrrb9f',
+    code: 'CSKJJ-63XZ6-BSKHK-SBBJJ-RRB9F',
+    game: 'BL4',
+    status: 'unknown',
+    reward: '5 Golden Keys',
+    rewardType: 'golden-keys',
+    keys: 5,
+    source: 'r/Borderlands4',
+    addedAt: '2026-09-30',
+    expiresAt: null,
+    isUniversal: false,
+  },
+  {
+    id: 'reddit-bl4-39fj3ctjtkcxtbcjtj3tw95rk',
+    code: '39FJ3-CTJTK-CXTBC-JTJ3T-W95RK',
+    game: 'BL4',
+    status: 'unknown',
+    reward: 'SHiFT Reward',
+    rewardType: 'golden-keys',
+    keys: 1,
+    source: 'r/Borderlands4',
+    addedAt: '2026-09-30',
+    expiresAt: null,
+    isUniversal: false,
+  },
+
+  // ============================================
   // REDDIT - Auto-fetched Codes (2026-09-30)
   // ============================================
   {
