@@ -39,7 +39,7 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 - 🖱️ **Middle-Click Redeem** - Middle mouse button opens Redeem in a new tab with code pre-filled
 - 🆕 **New Today Section** - Highlighted section for freshly added codes
 - ⚡ **Weekly Auto-Refresh** - Automatic data refresh with 7-day cache
-- 🐦 **Twitter Integration** - Pull codes from @Borderlands, @ShiftCodesTK, and more (manual runs only — see below)
+- 🐦 **Twitter Integration** - Pull codes from @Borderlands, @ShiftCodesTK, and more (manual runs only: see below)
 - 🤖 **Reddit Integration** - Daily auto-fetch from r/Borderlands4, r/Borderlands, r/borderlands3, r/Borderlandsshiftcodes
 - 🎨 **Borderlands Theme** - Custom dark theme with vault gold and orange accents
 - ♿ **Accessible** - ARIA labels and keyboard navigation support
@@ -70,7 +70,7 @@ Codes are aggregated from multiple trusted sources:
 
 > **Only the Reddit scraper runs on a schedule.** Reddit is the sole source that
 > currently updates the site automatically. Codes are *discovered*, never
-> redemption-tested, so no entry claims to be "verified" — always confirm on the
+> redemption-tested, so no entry claims to be "verified": always confirm on the
 > official SHiFT site.
 
 ## 🚀 Getting Started
@@ -146,8 +146,8 @@ src/
     ├── ci.yml                   # Typecheck, lint, tests, build, E2E (on PRs)
     ├── deploy-pages.yml         # GitHub Pages deployment
     ├── fetch-reddit-codes.yml   # Daily Reddit fetch (the only scheduled scraper)
-    ├── fetch-twitter-codes.yml  # Twitter fetch — manual dispatch only
-    └── fetch-game8-codes.yml    # Game8 fetch — manual dispatch only
+    ├── fetch-twitter-codes.yml  # Twitter fetch: manual dispatch only
+    └── fetch-game8-codes.yml    # Game8 fetch: manual dispatch only
 scripts/
 ├── fetch-twitter-codes.mjs      # Twitter fetch script
 ├── fetch-reddit-codes.mjs       # Reddit fetch script (4 subreddits)
@@ -168,12 +168,12 @@ scripts/
 
 ## ⚡ Performance
 
-- **Code splitting** — Routes lazy-loaded with `React.lazy()` + `Suspense`
-- **Vendor chunking** — React and Radix UI split into cacheable chunks
-- **Memoized components** — `CodeCard`, `CodeList`, `FilterBar`, `NewTodaySection` wrapped in `React.memo`
-- **CSS-driven hover effects** — Uses `group-hover` instead of React state for zero re-renders
-- **Capped animation stagger** — Animation delays capped to prevent long delays on large lists
-- **Modern build target** — `esnext` for smaller, more efficient bundles
+- **Code splitting**: Routes lazy-loaded with `React.lazy()` + `Suspense`
+- **Vendor chunking**: React and Radix UI split into cacheable chunks
+- **Memoized components**: `CodeCard`, `CodeList`, `FilterBar`, `NewTodaySection` wrapped in `React.memo`
+- **CSS-driven hover effects**: Uses `group-hover` instead of React state for zero re-renders
+- **Capped animation stagger**: Animation delays capped to prevent long delays on large lists
+- **Modern build target**: `esnext` for smaller, more efficient bundles
 
 ## 🔧 Configuration
 
@@ -211,7 +211,7 @@ scripts/
 
 ### Reddit Auto-Fetch (GitHub Actions)
 
-SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required — Reddit blocks the unauthenticated `.json` endpoint from datacenter IPs, so it fetches via Reddit RSS feeds (primary) with [PullPush.io](https://pullpush.io) as a fallback.
+SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required: Reddit blocks the unauthenticated `.json` endpoint from datacenter IPs, so it fetches via Reddit RSS feeds (primary) with [PullPush.io](https://pullpush.io) as a fallback.
 
 **Monitored Subreddits:**
 - [r/Borderlands4](https://reddit.com/r/Borderlands4) - BL4 community codes
