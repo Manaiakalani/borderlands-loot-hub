@@ -57,6 +57,23 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  */
 export const mockShiftCodes: ShiftCode[] = [
   // ============================================
+  // REDDIT - Auto-fetched Codes (2026-11-08)
+  // ============================================
+  {
+    id: 'reddit-bl2-s6x33ct9s3tjbtbbttbbh533c',
+    code: 'S6X33-CT9S3-TJBTB-BTTBB-H533C',
+    game: 'BL2',
+    status: 'unknown',
+    reward: '5 Golden Keys',
+    rewardType: 'golden-keys',
+    keys: 5,
+    source: 'r/Borderlands',
+    addedAt: '2026-11-04',
+    expiresAt: '2026-11-10',
+    isUniversal: false,
+  },
+
+  // ============================================
   // REDDIT - Auto-fetched Codes (2026-11-02)
   // ============================================
   {
