@@ -297,7 +297,7 @@ export function useShiftCodes() {
 
   /**
    * Fetches codes from local data or remote source
-   * Note: Twitter codes are fetched via GitHub Actions and merged into shiftCodes.ts
+   * Note: Reddit codes are fetched via GitHub Actions and merged into shiftCodes.ts
    */
   const fetchCodes = useCallback(async (forceRemote = false): Promise<FetchResult> => {
     // Try remote fetch first if enabled
@@ -308,7 +308,7 @@ export function useShiftCodes() {
       }
     }
 
-    // Use embedded data (includes Twitter codes fetched by GitHub Actions)
+    // Use embedded data (includes Reddit codes fetched by GitHub Actions)
     return { codes: mockShiftCodes, source: 'local' };
   }, []);
 

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a React + TypeScript web application that aggregates and displays SHiFT codes for Borderlands games (BL1, BL2, TPS, BL3, BL4, Wonderlands). It features a Borderlands-themed UI with automatic code expiration tracking, local caching, and automated Twitter code fetching via GitHub Actions.
+This is a React + TypeScript web application that aggregates and displays SHiFT codes for Borderlands games (BL1, BL2, TPS, BL3, BL4, Wonderlands). It features a Borderlands-themed UI with automatic code expiration tracking, local caching, and a daily Reddit fetch via GitHub Actions.
 
 ## Build & Test Commands
 
@@ -30,11 +30,11 @@ npm run lint             # Run ESLint on all files
 
 The app uses a **three-tier data system**:
 
-1. **Embedded data** (`src/data/shiftCodes.ts`) - Primary source, includes GitHub Actions-fetched Twitter codes
+1. **Embedded data** (`src/data/shiftCodes.ts`) - Primary source, includes GitHub Actions-fetched Reddit codes
 2. **LocalStorage cache** (`useShiftCodes` hook) - 7-day browser cache with version control
 3. **Remote fetch** (optional) - Can fetch from external JSON endpoint if configured
 
-**Critical**: Twitter codes are NOT fetched client-side. They're fetched daily by `.github/workflows/fetch-twitter-codes.yml` and committed directly to `shiftCodes.ts`.
+**Critical**: Codes are NOT fetched client-side. The daily job is `.github/workflows/fetch-reddit-codes.yml`, which commits new rows directly to `shiftCodes.ts`.
 
 ### State Management Pattern
 
@@ -102,7 +102,7 @@ When adding new codes to `shiftCodes.ts`:
 1. Generate unique ID: `{game}-{description}-{yyyymmdd}` (e.g., `bl4-golden-key-20260209`)
 2. Set `addedAt` to current date (ISO format: `YYYY-MM-DD`)
 3. Set `expiresAt` to `null` for indefinite codes, or ISO string for expiring codes
-4. Include `source` (e.g., 'mentalmars.com', 'twitter/@Borderlands')
+4. Include `source` (e.g., 'mentalmars.com', 'r/Borderlandsshiftcodes')
 5. Increment `DATA_VERSION` in `dataConfig.ts` if changing data structure
 6. **Never add a "verified" claim.** `lastVerifiedAt` was removed in v6 — nothing
    in this repo redeems a code, so any such field is an unsubstantiated claim.
@@ -145,17 +145,15 @@ import { cn } from '@/lib/utils';
 
 ### GitHub Actions Integration
 
-The `fetch-twitter-codes.yml` workflow:
-- Scheduled runs are **disabled** (X/Twitter API access is no longer available); manual `workflow_dispatch` only
-- Uses `TWITTER_BEARER_TOKEN` secret when run manually
-- Commits new codes directly to `shiftCodes.ts`
-
-The `fetch-reddit-codes.yml` workflow:
-- Runs daily at 9 AM UTC (offset from Twitter)
-- No API keys or secrets needed. Reddit 403-blocks the unauthenticated `.json`
-  endpoint from GitHub Actions IPs, so it fetches via **Reddit RSS feeds** (`/.rss`,
-  primary) with **PullPush.io** (third-party Reddit archive) as a fallback
+The `fetch-reddit-codes.yml` workflow is the only scheduled fetch:
+- Runs daily at 9 AM UTC
+- No API keys or secrets. Reddit blocks the unauthenticated `.json` endpoint from
+  GitHub Actions, and a burst of RSS requests returns HTTP 429, so the script
+  requests one feed at a time, retries 429/502/503, and falls through to Arctic
+  Shift and then PullPush when RSS returns nothing
 - Scrapes 4 subreddits: r/Borderlands4, r/Borderlands, r/borderlands3, r/Borderlandsshiftcodes
+- A bare `MULTI` title is filed on BL1, BL2, TPS, BL3, and BL4. Wonderlands is
+  included only when the post names it. Existing rows are matched on code and game
 - Fails **soft** (exit 0) when every source is unreachable, so it doesn't go red daily
 - Fails **hard** when the sources answer but nothing can be parsed or extracted —
   see `assessRunHealth()`. A green run with zero output used to be indistinguishable
@@ -163,18 +161,12 @@ The `fetch-reddit-codes.yml` workflow:
 - Caps additions per run via `applyPerRunCap()`; these commits land on `main` unattended
 - Commits new codes directly to `shiftCodes.ts`
 
-The `fetch-game8-codes.yml` workflow:
-- Scheduled runs are **disabled** since 2026-07: Cloudflare challenges GitHub Actions
-  IPs, so game8.co returns a ~2KB challenge page instead of the article and every
-  scheduled run failed. Manual `workflow_dispatch` only.
-
-**Shared safety net:** all fetch scripts insert via `scripts/lib/shift-codes-file.mjs`,
-a validated helper that refuses to write malformed output. The workflows also run
+**Shared safety net:** the fetch script inserts via `scripts/lib/shift-codes-file.mjs`,
+a validated helper that refuses to write malformed output. The workflow also runs
 `npx tsc -b --noEmit`, `npm run lint`, `npm test` and `npm run build` as a gate before
-committing, then dispatch `deploy-pages.yml` so new codes reach the live site.
+committing, then dispatches `deploy-pages.yml` so new codes reach the live site.
 
-**When debugging Twitter fetching**: Check `scripts/fetch-twitter-codes.mjs` (Node.js script, not browser code).
-**When debugging Reddit fetching**: Check `scripts/fetch-reddit-codes.mjs` (Node.js script using Reddit RSS feeds + PullPush.io, no auth).
+**When debugging Reddit fetching**: Check `scripts/fetch-reddit-codes.mjs` (Node.js script, not browser code).
 
 ## Testing Patterns
 
@@ -194,7 +186,7 @@ describe('useShiftCodes', () => {
 
 ## Common Pitfalls
 
-1. **Don't fetch Twitter codes client-side** - This is done by GitHub Actions
+1. **Don't fetch codes client-side** - The daily Reddit workflow commits them into `shiftCodes.ts`
 2. **Always use `getEffectiveStatus(code)`** - Never use `code.status` directly for display
 3. **Increment `DATA_VERSION`** when changing ShiftCode interface structure
 4. **Use `isUniversal: true`** for codes that work across all games (but still create separate entries per game for filtering)

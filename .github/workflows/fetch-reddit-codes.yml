@@ -1,7 +1,7 @@
 name: Fetch SHiFT Codes from Reddit
 
 on:
-  # Run daily at 9 AM UTC (offset from Twitter fetch at 8 AM)
+  # Run daily at 9 AM UTC
   schedule:
     - cron: '0 9 * * *'
 

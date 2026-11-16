@@ -151,8 +151,8 @@ const About = memo(() => {
               ))}
             </div>
             <p className="text-slate-300 mb-4">
-              Codes are automatically fetched daily from official Borderlands Twitter accounts 
-              using GitHub Actions, ensuring you always have access to the latest codes.
+              Codes are fetched daily from Borderlands subreddits using GitHub Actions,
+              so the list stays current without redeeming anything on your behalf.
             </p>
             <div className="flex flex-wrap gap-4">
               <a

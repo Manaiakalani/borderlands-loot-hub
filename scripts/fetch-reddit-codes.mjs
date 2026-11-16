@@ -484,8 +484,8 @@ async function fetchSubredditRSS(subreddit, sort = 'new', limit = 100, pace = fn
   const xml = await response.text();
 
   // An HTTP 200 is not proof of success. A blocked datacentre IP can be served an
-  // interstitial/challenge page with a 200 status — exactly what happened to
-  // game8.co. Without this check a challenge page yields `reachable: true` with
+  // interstitial/challenge page with a 200 status. Without this check a challenge
+  // page yields `reachable: true` with
   // zero posts, which assessRunHealth escalates to a hard error, turning the
   // daily schedule permanently red. Treat a non-feed body as "blocked" so the run
   // soft-skips instead.
@@ -875,8 +875,8 @@ const MAX_HEALTHY_SKIP_RATIO = 0.5;
  * `postsSeen === 0`, which sailed straight through as success.
  *
  * The bar for escalating to `error` is deliberately high. This runs unattended on a
- * daily schedule, and an alert that cries wolf gets ignored — which is how the
- * Game8 workflow's genuine failure went unnoticed for seven consecutive runs.
+ * daily schedule, and an alert that cries wolf gets ignored. A broken scheduled
+ * fetch once failed for seven runs before anyone noticed.
  */
 function assessRunHealth(stats) {
   const {
