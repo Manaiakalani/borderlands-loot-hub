@@ -1,7 +1,7 @@
 /**
  * Shared helpers for safely reading and writing src/data/shiftCodes.ts.
  *
- * The auto-fetch scripts (game8, reddit, twitter) all insert new code objects
+ * The Reddit auto-fetch script inserts new code objects
  * into the `mockShiftCodes` array. A historical bug inserted objects *inside*
  * the `ShiftCode[]` type annotation, producing invalid TypeScript that broke
  * the build on `main` (and had to be hand-repaired more than once). These

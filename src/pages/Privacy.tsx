@@ -145,10 +145,8 @@ const Privacy = memo(() => {
               SHiFT codes displayed on this website are aggregated from publicly available sources including:
             </p>
             <ul className="list-disc list-inside space-y-1 text-slate-400">
-              <li>Official Borderlands social media accounts</li>
-              <li>Community websites (MentalMars, Game8, Orcz.com)</li>
-              <li>Reddit communities (r/Borderlandsshiftcodes)</li>
-              <li>Gaming news publications</li>
+              <li>Reddit communities (r/Borderlandsshiftcodes, r/Borderlands, r/Borderlands4, r/borderlands3)</li>
+              <li>Public code lists such as MentalMars</li>
             </ul>
             <p className="text-slate-300 mt-3">
               We provide proper attribution and links to original sources where applicable.

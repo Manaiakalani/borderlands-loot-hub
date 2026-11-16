@@ -3,7 +3,7 @@
  * 
  * The app supports two data sources:
  * 1. LOCAL: Uses embedded data from shiftCodes.ts (default)
- *    - Twitter codes are automatically added via GitHub Actions
+ *    - Reddit codes are automatically added via GitHub Actions
  * 2. REMOTE: Fetches from a remote JSON endpoint
  * 
  * Remote fetching turns on automatically when VITE_DATA_SOURCE_URL is set at

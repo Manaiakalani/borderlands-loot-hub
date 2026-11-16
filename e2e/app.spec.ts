@@ -53,6 +53,7 @@ test.describe('Borderlands SHiFT Vault E2E', () => {
     await page.getByRole('link', { name: 'About SHiFT Vault' }).click();
     await expect(page).toHaveURL(/\/about/);
     await expect(page.locator('h1:has-text("About")')).toBeVisible();
+    await expect(page.getByText(/fetched daily from Borderlands subreddits/i)).toBeVisible();
   });
 
   test('navigation to Privacy page works', async ({ page }) => {
@@ -60,6 +61,7 @@ test.describe('Borderlands SHiFT Vault E2E', () => {
     await page.getByRole('link', { name: /Privacy/i }).click();
     await expect(page).toHaveURL(/\/privacy/);
     await expect(page.locator('h1:has-text("Privacy")')).toBeVisible();
+    await expect(page.getByText(/r\/Borderlandsshiftcodes, r\/Borderlands/)).toBeVisible();
   });
 
   test('404 page displays for unknown routes', async ({ page }) => {

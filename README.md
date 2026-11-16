@@ -39,7 +39,6 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 - 🖱️ **Middle-Click Redeem** - Middle mouse button opens Redeem in a new tab with code pre-filled
 - 🆕 **New Today Section** - Highlighted section for freshly added codes
 - ⚡ **Weekly Auto-Refresh** - Automatic data refresh with 7-day cache
-- 🐦 **Twitter Integration** - Pull codes from @Borderlands, @ShiftCodesTK, and more (manual runs only: see below)
 - 🤖 **Reddit Integration** - Daily auto-fetch from r/Borderlands4, r/Borderlands, r/borderlands3, r/Borderlandsshiftcodes
 - 🎨 **Borderlands Theme** - Custom dark theme with vault gold and orange accents
 - ♿ **Accessible** - ARIA labels and keyboard navigation support
@@ -61,12 +60,10 @@ SHiFT Vault is a modern web application that aggregates and displays SHiFT codes
 Codes are aggregated from multiple trusted sources:
 
 - **[MentalMars.com](https://mentalmars.com)** - Comprehensive SHiFT code database (manual import)
-- **[Game8.co](https://game8.co/games/Borderlands-4/archives/548406)** - Borderlands 4 codes with expiration info (manual runs only; Cloudflare blocks GitHub Actions IPs)
 - **[r/Borderlandsshiftcodes](https://reddit.com/r/Borderlandsshiftcodes)** - Community-sourced codes from Reddit
 - **[r/Borderlands4](https://reddit.com/r/Borderlands4)** - Borderlands 4 community
 - **[r/Borderlands](https://reddit.com/r/Borderlands)** - Main Borderlands subreddit
 - **[r/borderlands3](https://reddit.com/r/borderlands3)** - Borderlands 3 community
-- **Twitter** - @Borderlands, @ShiftCodesTK, @DuvalMagic (manual runs only; the X API is no longer available)
 
 > **Only the Reddit scraper runs on a schedule.** Reddit is the sole source that
 > currently updates the site automatically. Codes are *discovered*, never
@@ -146,12 +143,8 @@ src/
     ├── ci.yml                   # Typecheck, lint, tests, build, E2E (on PRs)
     ├── deploy-pages.yml         # GitHub Pages deployment
     ├── fetch-reddit-codes.yml   # Daily Reddit fetch (the only scheduled scraper)
-    ├── fetch-twitter-codes.yml  # Twitter fetch: manual dispatch only
-    └── fetch-game8-codes.yml    # Game8 fetch: manual dispatch only
 scripts/
-├── fetch-twitter-codes.mjs      # Twitter fetch script
 ├── fetch-reddit-codes.mjs       # Reddit fetch script (4 subreddits)
-├── fetch-game8-codes.mjs        # Game8.co fetch script
 └── lib/shift-codes-file.mjs     # Shared validation + safe write helper
 ```
 
@@ -177,41 +170,9 @@ scripts/
 
 ## 🔧 Configuration
 
-### Twitter Fetch (manual only)
-
-> **Disabled on a schedule.** X/Twitter API access is no longer available for this
-> workflow, so it runs only when dispatched manually from the Actions tab, and
-> only if a `TWITTER_BEARER_TOKEN` secret is present.
-
-**Setup (only needed if you have API access):**
-1. Go to your GitHub repo -> **Settings** -> **Secrets and variables** -> **Actions**
-2. Click **New repository secret**
-3. Name: `TWITTER_BEARER_TOKEN`
-4. Value: Your Twitter API bearer token ([get one here](https://developer.twitter.com/))
-
-**Monitored Twitter Accounts:**
-- [@Borderlands](https://twitter.com/Borderlands) - Official Gearbox account
-- [@ShiftCodesTK](https://twitter.com/ShiftCodesTK) - SHiFT code tracker
-- [@borderlands4HQ](https://twitter.com/borderlands4HQ) - BL4 news & codes
-- [@DuvalMagic](https://twitter.com/DuvalMagic) - Randy Pitchford (Gearbox CEO)
-
-**How it works:**
-- Triggered manually from the Actions tab
-- Fetches tweets from monitored accounts
-- Extracts any SHiFT codes found
-- Validates, then commits new codes to `src/data/shiftCodes.ts`
-
-### Game8 Fetch (manual only)
-
-> **Disabled on a schedule since 2026-07.** Cloudflare began challenging GitHub
-> Actions IPs around 2026-06-17, so game8.co returns a challenge page instead of
-> the article and every scheduled run failed. There is no API to authenticate
-> with. Dispatch it manually to retry; the script exits non-zero if it is still
-> being challenged.
-
 ### Reddit Auto-Fetch (GitHub Actions)
 
-SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required. Reddit blocks the unauthenticated `.json` endpoint from datacenter IPs and answers a burst of RSS requests with HTTP 429, so the run requests one feed at a time, retries rate limits, and falls through to [Arctic Shift](https://arctic-shift.photon-reddit.com) and then [PullPush.io](https://pullpush.io) when RSS returns nothing.
+SHiFT codes are scraped daily from four Borderlands subreddits. No API keys required. Reddit blocks the unauthenticated `.json` endpoint from datacenter IPs and answers a burst of RSS requests with HTTP 429, so the run requests one feed at a time, retries rate limits, and falls through to [Arctic Shift](https://arctic-shift.photon-reddit.com) and then [PullPush.io](https://pullpush.io) when RSS returns nothing.
 
 **Monitored Subreddits:**
 - [r/Borderlands4](https://reddit.com/r/Borderlands4) - BL4 community codes
