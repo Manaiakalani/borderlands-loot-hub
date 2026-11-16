@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   decodeEntities,
   detectGame,
+  detectGames,
   detectRewardType,
   extractKeyCount,
   extractRewardLabel,
@@ -15,6 +16,13 @@ import {
   looksLikeShiftCode,
   isAtomFeedBody,
   tallyPosts,
+  codesMissingFromVault,
+  fetchWithBackoff,
+  retryDelayMs,
+  parseRetryAfter,
+  shouldRetryStatus,
+  createRequestPacer,
+  shouldFetchHot,
   MAX_NEW_CODES_PER_RUN,
 } from "../../scripts/fetch-reddit-codes.mjs";
 
@@ -713,5 +721,127 @@ describe("tallyPosts (counters that drive assessRunHealth)", () => {
     const tally = tallyPosts(posts, "Borderlands4");
     expect(tally).toMatchObject({ postsSeen: 1, postsSkipped: 0, postsWithCandidates: 0 });
     expect(tally.codes).toHaveLength(0);
+  });
+});
+
+const CODE = "WZKJT-XRT9J-9JCWK-JJJ3B-Z9WHF";
+
+describe("detectGames", () => {
+  it("keeps a single named game as one row", () => {
+    expect(detectGames("New BL2 golden key", "Borderlands")).toEqual(["BL2"]);
+    expect(detectGame("here is a code", "borderlands4")).toBe("BL4");
+  });
+
+  it("files a bare MULTI title under the five mainline games, not Wonderlands", () => {
+    expect(detectGames(`MULTI ${CODE}`, "Borderlandsshiftcodes")).toEqual([
+      "BL1",
+      "BL2",
+      "TPS",
+      "BL3",
+      "BL4",
+    ]);
+  });
+
+  it("uses an explicit mainline list, and adds Wonderlands only when named", () => {
+    const list = `20 Golden Keys per title in Borderlands 1,2, TPS, 3 and 4 ${CODE}`;
+    expect(detectGames(list, "Borderlandsshiftcodes")).toEqual([
+      "BL1",
+      "BL2",
+      "TPS",
+      "BL3",
+      "BL4",
+    ]);
+    expect(detectGames(`${list} and Tiny Tina's Wonderlands`, "Borderlandsshiftcodes")).toEqual([
+      "BL1",
+      "BL2",
+      "TPS",
+      "BL3",
+      "BL4",
+      "WONDERLANDS",
+    ]);
+  });
+
+  it("does not treat a universal platform note as every game", () => {
+    expect(detectGames(`universal BL4 code ${CODE}`, "Borderlands")).toEqual(["BL4"]);
+  });
+
+  it("emits one vault row per game for a MULTI post", () => {
+    const rows = extractCodesFromPost(
+      { title: "MULTI", selftext: CODE, created_utc: 1_794_000_000 },
+      "Borderlandsshiftcodes",
+    );
+    expect(rows.map(row => row.game)).toEqual(["BL1", "BL2", "TPS", "BL3", "BL4"]);
+    expect(new Set(rows.map(row => row.code))).toEqual(new Set([CODE]));
+  });
+});
+
+describe("codesMissingFromVault", () => {
+  it("keeps a game that is not filed yet for a code that already exists", () => {
+    const existing = new Set([`${CODE}::BL4`]);
+    const rows = [
+      { code: CODE, game: "BL4" },
+      { code: CODE, game: "BL2" },
+    ];
+    expect(codesMissingFromVault(rows, existing)).toEqual([{ code: CODE, game: "BL2" }]);
+  });
+});
+
+describe("fetch pacing and retries", () => {
+  it("retries HTTP 429 and then returns the successful response", async () => {
+    const sleeps: number[] = [];
+    const statuses = [429, 200];
+    const response = await fetchWithBackoff("https://example.test/rss", {}, {
+      maxAttempts: 3,
+      random: () => 0,
+      sleep: async (ms: number) => { sleeps.push(ms); },
+      fetchImpl: async () => ({
+        status: statuses.shift() ?? 200,
+        headers: { get: () => null },
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(sleeps).toEqual([2000]);
+  });
+
+  it("does not retry a 403", async () => {
+    let calls = 0;
+    const response = await fetchWithBackoff("https://example.test/rss", {}, {
+      maxAttempts: 3,
+      sleep: async () => { throw new Error("should not sleep"); },
+      fetchImpl: async () => {
+        calls += 1;
+        return { status: 403, headers: { get: () => null } };
+      },
+    });
+    expect(response.status).toBe(403);
+    expect(calls).toBe(1);
+  });
+
+  it("honors a numeric Retry-After and caps it", () => {
+    expect(parseRetryAfter("3", 0)).toBe(3000);
+    expect(parseRetryAfter("120", 0)).toBe(15000);
+    expect(parseRetryAfter("nope", 0)).toBeNull();
+    expect(shouldRetryStatus(429)).toBe(true);
+    expect(shouldRetryStatus(403)).toBe(false);
+    expect(retryDelayMs(1, "2", () => 0, 0)).toBe(2000);
+  });
+
+  it("skips hot when new was rate-limited, and asks for it when new is thin", () => {
+    expect(shouldFetchHot({ reachable: false, posts: [] })).toBe(false);
+    expect(shouldFetchHot({ reachable: true, posts: [] })).toBe(true);
+    expect(shouldFetchHot({ reachable: true, posts: new Array(100) })).toBe(false);
+  });
+
+  it("spaces later requests by the gap", async () => {
+    const sleeps: number[] = [];
+    let clock = 1_000;
+    const pace = createRequestPacer({
+      gapMs: 2500,
+      now: () => clock,
+      sleep: async (ms: number) => { sleeps.push(ms); clock += ms; },
+    });
+    await pace(async () => "first");
+    await pace(async () => "second");
+    expect(sleeps).toEqual([2500]);
   });
 });
