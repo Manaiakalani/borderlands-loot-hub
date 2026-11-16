@@ -255,6 +255,12 @@ The Borderlands theme is defined in [src/index.css](src/index.css). Key CSS vari
 }
 ```
 
+## 📋 v1.5.0 Updates (November 2026)
+
+- Added the November 11 SHiFT code `S6RJJ-6THZT-BJJTJ-TB3JT-R995J` (5 keys, every Borderlands game and Tiny Tina's Wonderlands, expires November 17, 2026).
+- Filed the 100-million-sales code under Borderlands 1, 2, The Pre-Sequel, 3, and 4, and set its expiry to November 16, 2026.
+- Filled game-filter gaps for the September multi-game key codes, the expired November 4 drops, 14 Borderlands 1 keys from MentalMars, and 4 Pre-Sequel PC keys.
+
 ## 📋 v1.4.0 Updates (August 2026)
 
 - Forced `nanoid` to **3.3.18**, closing Dependabot alert #41 (`GHSA-2v37-7h3g-55p8`) in production.
