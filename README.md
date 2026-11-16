@@ -211,7 +211,7 @@ scripts/
 
 ### Reddit Auto-Fetch (GitHub Actions)
 
-SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required: Reddit blocks the unauthenticated `.json` endpoint from datacenter IPs, so it fetches via Reddit RSS feeds (primary) with [PullPush.io](https://pullpush.io) as a fallback.
+SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys required. Reddit blocks the unauthenticated `.json` endpoint from datacenter IPs and answers a burst of RSS requests with HTTP 429, so the run requests one feed at a time, retries rate limits, and falls through to [Arctic Shift](https://arctic-shift.photon-reddit.com) and then [PullPush.io](https://pullpush.io) when RSS returns nothing.
 
 **Monitored Subreddits:**
 - [r/Borderlands4](https://reddit.com/r/Borderlands4) - BL4 community codes
@@ -221,10 +221,10 @@ SHiFT codes are also scraped daily from four Borderlands subreddits. No API keys
 
 **How it works:**
 - GitHub Actions runs daily at 9 AM UTC
-- Fetches hot and new posts from all four subreddits
+- Fetches the new feed from all four subreddits, and the hot feed only when new answered but came back nearly empty
 - Extracts SHiFT codes using regex pattern matching
-- Detects game type, reward, and expiration automatically
-- Deduplicates against existing codes and commits new ones to `src/data/shiftCodes.ts`
+- Detects game type, reward, and expiration automatically. A post that names several games, or a bare `MULTI` title, is filed once per game
+- Deduplicates against existing code and game rows and commits new ones to `src/data/shiftCodes.ts`
 - Caps how many codes one unattended run may add, and fails the run if the feeds
   respond but nothing can be parsed or extracted (so a silent format change is
   visible rather than looking like a quiet day)

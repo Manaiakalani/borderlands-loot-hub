@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   ARRAY_ANCHOR,
   extractExistingCodeStrings,
+  extractExistingCodeGamePairs,
   insertEntriesAfterAnchor,
   assertValidShiftCodesFile,
   escapeTsString,
@@ -49,6 +50,12 @@ describe("shift-codes-file helper", () => {
     const codes = extractExistingCodeStrings(VALID_FILE);
     expect(codes.has("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE")).toBe(true);
     expect(codes.size).toBe(1);
+  });
+
+  it("extracts code and game pairs, so a second game is not treated as present", () => {
+    const pairs = extractExistingCodeGamePairs(VALID_FILE);
+    expect(pairs.has("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE::BL4")).toBe(true);
+    expect(pairs.has("AAAAA-BBBBB-CCCCC-DDDDD-EEEEE::BL2")).toBe(false);
   });
 
   it("inserts a valid entry, keeps the anchor, and grows the count by exactly one", () => {

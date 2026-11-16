@@ -2,9 +2,13 @@
 /**
  * Reddit SHiFT Code Scraper
  *
- * Fetches SHiFT codes from multiple Borderlands subreddits using
- * Reddit's public .json endpoints (no API key required) and writes
+ * Fetches SHiFT codes from multiple Borderlands subreddits and writes
  * new codes directly into src/data/shiftCodes.ts.
+ *
+ * Reddit's unauthenticated .json endpoint is blocked from GitHub Actions,
+ * and a burst of RSS requests is answered with HTTP 429 after the first
+ * subreddit. Requests are serial, retried on 429/502/503, and when RSS
+ * yields nothing the run falls through to Arctic Shift, then PullPush.
  *
  * Usage:
  *   node scripts/fetch-reddit-codes.mjs
@@ -15,7 +19,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import {
   readShiftCodesFile,
-  extractExistingCodeStrings,
+  extractExistingCodeGamePairs,
   insertEntriesAfterAnchor,
   writeShiftCodesFile,
   escapeTsString,
@@ -102,6 +106,20 @@ const FIELD_MAX_LENGTH = 300;
 /** Upper bound on how many codes a single unattended run may commit. */
 const MAX_NEW_CODES_PER_RUN = 25;
 
+/** Gap between upstream requests. A tighter burst draws HTTP 429 from Actions IPs. */
+const REQUEST_GAP_MS = 2500;
+const MAX_FETCH_ATTEMPTS = 4;
+const BACKOFF_BASE_MS = 2000;
+const BACKOFF_CAP_MS = 15000;
+
+/** Games a bare "MULTI" / "all games" post covers. Wonderlands is separate. */
+const MAINLINE_GAMES = ['BL1', 'BL2', 'TPS', 'BL3', 'BL4'];
+
+const MAINLINE_LIST_PATTERNS = [
+  /\bborderlands\s*1\s*,\s*2\s*,\s*(?:tps|the\s+pre-?sequel|pre-?sequel)\s*,\s*3\s*(?:,\s*|\s+and\s+)4\b/i,
+  /\bBL1\b[\s,]+(?:and\s+)?BL2\b[\s,]+(?:and\s+)?(?:TPS|pre-?sequel)\b[\s,]+(?:and\s+)?BL3\b[\s,]+(?:and\s+)?BL4\b/i,
+];
+
 function normalizeText(value, fallback = '') {
   return sanitizeText(value, { maxLength: SCAN_MAX_LENGTH, fallback });
 }
@@ -111,12 +129,46 @@ function normalizeField(value, fallback = '') {
   return sanitizeText(value, { maxLength: FIELD_MAX_LENGTH, fallback });
 }
 
-function detectGame(text, subreddit) {
+function uniqueGames(games) {
+  return [...new Set(games)];
+}
+
+/**
+ * Games a post actually names.
+ *
+ * r/Borderlandsshiftcodes titles a cross-game drop "MULTI" and often puts only
+ * the code in the body, which used to fall through to the subreddit default
+ * (BL4) and drop every other title. An explicit list such as "Borderlands 1, 2,
+ * TPS, 3 and 4" wins over that title. Wonderlands is included only when the
+ * post says so: a bare MULTI drop is the five mainline games.
+ */
+function detectGames(text, subreddit) {
   const normalizedText = normalizeText(text, '');
+  const named = [];
   for (const [game, pattern] of Object.entries(GAME_PATTERNS)) {
-    if (pattern.test(normalizedText)) return game;
+    if (pattern.test(normalizedText)) named.push(game);
   }
-  return SUBREDDIT_GAME_DEFAULTS[normalizeText(subreddit, '').toLowerCase()] || 'BL4';
+  const listedMainline = MAINLINE_LIST_PATTERNS.some(pattern => pattern.test(normalizedText));
+  const broad = /\bmulti\b/i.test(normalizedText)
+    || /\ball\s+games\b/i.test(normalizedText)
+    || /\bevery\s+game\b/i.test(normalizedText);
+  const wonderlands = named.includes('WONDERLANDS');
+  const withWonderlands = wonderlands ? ['WONDERLANDS'] : [];
+
+  if (listedMainline) return uniqueGames([...MAINLINE_GAMES, ...withWonderlands]);
+  // One incidental game mention should not collapse "MULTI" to a single title.
+  // Two or more named games are a real narrower list.
+  const namedMainline = named.filter(game => game !== 'WONDERLANDS');
+  if (broad && namedMainline.length < 2) {
+    return uniqueGames([...MAINLINE_GAMES, ...withWonderlands]);
+  }
+  if (named.length > 0) return named;
+  const fallback = SUBREDDIT_GAME_DEFAULTS[normalizeText(subreddit, '').toLowerCase()] || 'BL4';
+  return [fallback];
+}
+
+function detectGame(text, subreddit) {
+  return detectGames(text, subreddit)[0];
 }
 
 function detectRewardType(text) {
@@ -285,10 +337,12 @@ function formatLocalDate(date) {
 // ── Reddit fetching (no-auth sources) ──────────────────────────────
 //
 // Reddit blocks unauthenticated `.json` requests from datacenter IPs (used by
-// GitHub Actions) with HTTP 403. Two sources still work without API keys:
-//   1. Reddit RSS feeds (`/.rss`) — official, current, more permissive.
-//   2. PullPush.io — a third-party Reddit archive, independent of Reddit's IP
-//      blocking (used as a fallback when RSS is unavailable).
+// GitHub Actions) with HTTP 403. RSS still works, but a parallel new+hot burst
+// is rate-limited with HTTP 429 after the first subreddit, which used to skip
+// r/Borderlandsshiftcodes entirely. Requests go out one at a time, 429/502/503
+// are retried, and an empty RSS result falls through to:
+//   1. Arctic Shift — a public archive that is current within hours.
+//   2. PullPush.io — last, because it 403s from Actions and lags the others.
 
 /** Decode the HTML entities Reddit uses inside RSS <content> bodies. */
 function decodeEntities(str) {
@@ -316,17 +370,107 @@ export function isAtomFeedBody(xml) {
   return xml.includes('<feed') || xml.includes('<entry>');
 }
 
+/** Statuses that are worth a backoff. A 403 is a block, not a queue. */
+function shouldRetryStatus(status) {
+  return status === 429 || status === 502 || status === 503;
+}
+
+/**
+ * Retry-After as milliseconds, capped so one response cannot stall the run.
+ * HTTP-date values are accepted. Anything else returns null.
+ */
+function parseRetryAfter(header, nowMs = Date.now()) {
+  if (header == null) return null;
+  const trimmed = String(header).trim();
+  if (trimmed === '') return null;
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return Math.min(BACKOFF_CAP_MS, Math.max(0, Number(trimmed) * 1000));
+  }
+  const when = Date.parse(trimmed);
+  if (!Number.isFinite(when)) return null;
+  return Math.min(BACKOFF_CAP_MS, Math.max(0, when - nowMs));
+}
+
+/** Delay before attempt `attempt` (1 = first retry). Honors Retry-After. */
+function retryDelayMs(attempt, retryAfterHeader, random = Math.random, nowMs = Date.now()) {
+  const fromHeader = parseRetryAfter(retryAfterHeader, nowMs);
+  if (fromHeader != null) return fromHeader;
+  const exp = Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** (attempt - 1));
+  const roll = typeof random === 'function' ? random() : 0;
+  return exp + Math.floor((Number.isFinite(roll) ? roll : 0) * 250);
+}
+
+/**
+ * Fetch one URL, retrying rate limits and transient gateway errors.
+ * Each attempt gets its own timeout so a slow first try cannot abort the rest.
+ */
+async function fetchWithBackoff(url, options = {}, deps = {}) {
+  const doFetch = deps.fetchImpl ?? fetch;
+  const sleep = deps.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  const maxAttempts = deps.maxAttempts ?? MAX_FETCH_ATTEMPTS;
+  const timeoutMs = deps.timeoutMs ?? 20000;
+  const random = deps.random;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let response;
+    try {
+      response = await doFetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (err) {
+      if (attempt === maxAttempts) throw err;
+      const wait = retryDelayMs(attempt, null, random);
+      console.warn(`  ⏳ request failed (${err.message}); retrying in ${wait}ms`);
+      await sleep(wait);
+      continue;
+    }
+    if (shouldRetryStatus(response.status) && attempt < maxAttempts) {
+      const wait = retryDelayMs(attempt, response.headers?.get?.('retry-after') ?? null, random);
+      console.warn(`  ⏳ HTTP ${response.status}; retrying in ${wait}ms`);
+      await sleep(wait);
+      continue;
+    }
+    return response;
+  }
+}
+
+/**
+ * Serialize upstream calls. Parallel new+hot requests from one Actions IP
+ * were enough to 429 every subreddit after the first.
+ */
+function createRequestPacer({ gapMs = REQUEST_GAP_MS, sleep, now } = {}) {
+  const wait = sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  const clock = now ?? Date.now;
+  let chain = Promise.resolve();
+  let started = false;
+  let lastStarted = 0;
+
+  return function pace(fn) {
+    const run = chain.then(async () => {
+      if (started) {
+        const delay = Math.max(0, gapMs - (clock() - lastStarted));
+        if (delay > 0) await wait(delay);
+      }
+      started = true;
+      lastStarted = clock();
+      return fn();
+    });
+    chain = run.then(() => {}, () => {});
+    return run;
+  };
+}
+
 /**
  * Fetch posts from a subreddit's RSS feed. Returns normalised post objects
  * compatible with extractCodesFromPost().
  */
-async function fetchSubredditRSS(subreddit, sort = 'new', limit = 100) {
+async function fetchSubredditRSS(subreddit, sort = 'new', limit = 100, pace = fn => fn()) {
   const url = `https://www.reddit.com/r/${subreddit}/${sort}/.rss?limit=${limit}`;
   console.log(`  📡 RSS /r/${subreddit}/${sort} ...`);
 
   let response;
   try {
-    response = await fetch(url, { headers: { ...COMMON_HEADERS, Accept: 'application/atom+xml, application/xml, text/xml, */*' }, signal: AbortSignal.timeout(15000) });
+    response = await pace(() => fetchWithBackoff(url, {
+      headers: { ...COMMON_HEADERS, Accept: 'application/atom+xml, application/xml, text/xml, */*' },
+    }));
   } catch (err) {
     console.warn(`  ⚠️  RSS /r/${subreddit}/${sort}: ${err.message}`);
     return { posts: [], reachable: false };
@@ -370,31 +514,30 @@ async function fetchSubredditRSS(subreddit, sort = 'new', limit = 100) {
 }
 
 /**
- * Fallback: fetch posts from PullPush.io (a third-party Reddit archive).
+ * Shared reader for Arctic Shift and PullPush. Both return `{ data: Post[] }`
+ * in the old Pushshift shape. A 200 with no array is a block page, not an
+ * empty subreddit.
  */
-async function fetchSubredditPullPush(subreddit, size = 100) {
-  const url = `https://api.pullpush.io/reddit/search/submission/?subreddit=${subreddit}&size=${size}&sort=desc&sort_type=created_utc`;
-  console.log(`  📡 PullPush r/${subreddit} ...`);
+async function fetchArchive(label, url, pace = fn => fn()) {
+  console.log(`  📡 ${label} ...`);
 
   let response;
   try {
-    response = await fetch(url, { headers: COMMON_HEADERS, signal: AbortSignal.timeout(15000) });
+    response = await pace(() => fetchWithBackoff(url, { headers: COMMON_HEADERS }));
   } catch (err) {
-    console.warn(`  ⚠️  PullPush r/${subreddit}: ${err.message}`);
+    console.warn(`  ⚠️  ${label}: ${err.message}`);
     return { posts: [], reachable: false };
   }
 
   if (!response.ok) {
-    console.warn(`  ⚠️  PullPush r/${subreddit}: ${response.status} ${response.statusText}`);
+    console.warn(`  ⚠️  ${label}: ${response.status} ${response.statusText}`);
     return { posts: [], reachable: false };
   }
 
   try {
     const data = await response.json();
-    // Valid JSON is not proof of a valid payload: an error envelope such as
-    // {"error":"blocked"} would otherwise read as a reachable-but-empty source.
     if (!Array.isArray(data?.data)) {
-      console.warn(`  ⚠️  PullPush r/${subreddit}: HTTP 200 but no "data" array — treating as blocked.`);
+      console.warn(`  ⚠️  ${label}: HTTP 200 but no "data" array — treating as blocked.`);
       return { posts: [], reachable: false };
     }
     const posts = data.data.map(p => ({
@@ -407,9 +550,19 @@ async function fetchSubredditPullPush(subreddit, size = 100) {
     }));
     return { posts, reachable: true };
   } catch {
-    console.warn(`  ⚠️  PullPush r/${subreddit}: failed to parse JSON`);
+    console.warn(`  ⚠️  ${label}: failed to parse JSON`);
     return { posts: [], reachable: false };
   }
+}
+
+function fetchSubredditArctic(subreddit, pace) {
+  const url = `https://arctic-shift.photon-reddit.com/api/posts/search?subreddit=${encodeURIComponent(subreddit)}&limit=100&sort=desc`;
+  return fetchArchive(`Arctic Shift r/${subreddit}`, url, pace);
+}
+
+function fetchSubredditPullPush(subreddit, pace) {
+  const url = `https://api.pullpush.io/reddit/search/submission/?subreddit=${encodeURIComponent(subreddit)}&size=100&sort=desc&sort_type=created_utc`;
+  return fetchArchive(`PullPush r/${subreddit}`, url, pace);
 }
 
 /** Deduplicate posts by id. */
@@ -423,21 +576,45 @@ function dedupePosts(posts) {
 }
 
 /**
- * Fetch a single subreddit: RSS (new + hot) first, PullPush as fallback.
- * `reachable` is true if *any* source responded successfully.
+ * Hot is a second Reddit request. Ask for it only when `new` answered and
+ * came back nearly empty. A 429 on `new` means the same IP will 429 on `hot`,
+ * so that case goes straight to the archives.
  */
-async function fetchSubreddit(subreddit) {
-  const [rssNew, rssHot] = await Promise.all([
-    fetchSubredditRSS(subreddit, 'new'),
-    fetchSubredditRSS(subreddit, 'hot'),
-  ]);
+function shouldFetchHot(rssNew) {
+  return Boolean(rssNew?.reachable) && (rssNew.posts?.length ?? 0) < 5;
+}
 
-  let posts = dedupePosts([...rssNew.posts, ...rssHot.posts]);
-  let reachable = rssNew.reachable || rssHot.reachable;
+/**
+ * Fetch a single subreddit.
+ *
+ * `new` is the feed that carries fresh codes. Arctic Shift, then PullPush,
+ * run only when RSS produced no posts. `reachable` is true if any source
+ * responded.
+ */
+async function fetchSubreddit(subreddit, pace) {
+  const rssNew = await fetchSubredditRSS(subreddit, 'new', 100, pace);
+
+  let posts = dedupePosts(rssNew.posts);
+  let reachable = rssNew.reachable;
   let source = 'rss';
 
+  if (shouldFetchHot(rssNew)) {
+    const rssHot = await fetchSubredditRSS(subreddit, 'hot', 100, pace);
+    posts = dedupePosts([...posts, ...rssHot.posts]);
+    reachable = reachable || rssHot.reachable;
+  }
+
   if (posts.length === 0) {
-    const pp = await fetchSubredditPullPush(subreddit);
+    const arctic = await fetchSubredditArctic(subreddit, pace);
+    reachable = reachable || arctic.reachable;
+    if (arctic.posts.length > 0) {
+      posts = arctic.posts;
+      source = 'arctic-shift';
+    }
+  }
+
+  if (posts.length === 0) {
+    const pp = await fetchSubredditPullPush(subreddit, pace);
     reachable = reachable || pp.reachable;
     if (pp.posts.length > 0) {
       posts = pp.posts;
@@ -466,7 +643,7 @@ function extractCodesFromPost(post, subreddit) {
     ? new Date(createdUtc * 1000)
     : new Date();
 
-  const game = detectGame(combinedText, subreddit);
+  const games = detectGames(combinedText, subreddit);
   const rewardType = detectRewardType(combinedText);
   // A post can advertise an implausible quantity ("Giveaway: 100 golden keys!")
   // alongside a perfectly real code. assertValidCodeShape caps keys at 99, and
@@ -481,29 +658,31 @@ function extractCodesFromPost(post, subreddit) {
   const normalizedSubreddit = normalizeField(subreddit, 'unknown');
   const codes = [];
 
-  for (const [index, code] of uniqueCodes.entries()) {
-    const codeEntry = {
-      id: `reddit-${normalizedSubreddit.toLowerCase()}-${code.slice(0, 5).toLowerCase()}-${index}`,
-      code,
-      game,
-      status: 'unknown',
-      reward,
-      rewardType,
-      keys: rewardType.endsWith('-keys') ? keyCount : undefined,
-      expiresAt,
-      source: `r/${normalizedSubreddit}`,
-      addedAt: postDate,
-      // Deliberately not setting lastVerifiedAt: the scraper only *discovers*
-      // codes, it never confirms they redeem. Stamping it here made the UI show
-      // a green "Verified" badge for entirely unverified codes.
-      isUniversal: /universal|all\s*games|every\s*game/i.test(combinedText),
-      postDate,
-      upvotes,
-      subreddit: normalizedSubreddit,
-    };
+  for (const game of games) {
+    for (const [index, code] of uniqueCodes.entries()) {
+      const codeEntry = {
+        id: `reddit-${normalizedSubreddit.toLowerCase()}-${game.toLowerCase()}-${code.slice(0, 5).toLowerCase()}-${index}`,
+        code,
+        game,
+        status: 'unknown',
+        reward,
+        rewardType,
+        keys: rewardType.endsWith('-keys') ? keyCount : undefined,
+        expiresAt,
+        source: `r/${normalizedSubreddit}`,
+        addedAt: postDate,
+        // Deliberately not setting lastVerifiedAt: the scraper only *discovers*
+        // codes, it never confirms they redeem. Stamping it here made the UI show
+        // a green "Verified" badge for entirely unverified codes.
+        isUniversal: /universal|all\s*games|every\s*game/i.test(combinedText),
+        postDate,
+        upvotes,
+        subreddit: normalizedSubreddit,
+      };
 
-    assertValidCodeShape(codeEntry);
-    codes.push(codeEntry);
+      assertValidCodeShape(codeEntry);
+      codes.push(codeEntry);
+    }
   }
 
   return codes;
@@ -512,8 +691,19 @@ function extractCodesFromPost(post, subreddit) {
 // ── shiftCodes.ts read / write ─────────────────────────────────────
 
 function readExistingCodes() {
-  const content = readShiftCodesFile(SHIFT_CODES_PATH);
-  return { existingCodeStrings: extractExistingCodeStrings(content), fileContent: content };
+  const fileContent = readShiftCodesFile(SHIFT_CODES_PATH);
+  return { existingPairs: extractExistingCodeGamePairs(fileContent), fileContent };
+}
+
+/**
+ * Drop rows whose code is already filed for that game.
+ *
+ * Keyed on code + game, not the code string. The same SHiFT code is often
+ * posted once per title, and a code-only check kept every game after the first
+ * one out of the vault.
+ */
+function codesMissingFromVault(codes, existingPairs) {
+  return codes.filter(code => !existingPairs.has(`${code.code}::${code.game}`));
 }
 
 /**
@@ -703,7 +893,7 @@ function assessRunHealth(stats) {
     return {
       level: 'skip',
       message:
-        'All Reddit sources were unreachable this run (RSS + PullPush). ' +
+        'All Reddit sources were unreachable this run (RSS, Arctic Shift, and PullPush). ' +
         'Skipping update; will retry on the next schedule.',
     };
   }
@@ -803,7 +993,9 @@ async function main() {
   console.log('🎮 Reddit SHiFT Code Scraper');
   console.log('============================\n');
 
-  // 1. Fetch posts from all subreddits (RSS primary, PullPush fallback)
+  // 1. Fetch posts from all subreddits (RSS, then Arctic Shift, then PullPush).
+  // One pacer covers the whole run so the gap holds across subreddits too.
+  const pace = createRequestPacer();
   const allCodes = [];
   let anyReachable = false;
   let subredditsWithPosts = 0;
@@ -815,7 +1007,7 @@ async function main() {
   for (const subreddit of SUBREDDITS) {
     console.log(`\n📂 r/${subreddit}`);
     try {
-      const { posts, reachable } = await fetchSubreddit(subreddit);
+      const { posts, reachable } = await fetchSubreddit(subreddit, pace);
       if (reachable) anyReachable = true;
       if (posts.length > 0) subredditsWithPosts++;
 
@@ -826,9 +1018,6 @@ async function main() {
       postsWithCandidates += tally.postsWithCandidates;
       postsMentioningCodes += tally.postsMentioningCodes;
       for (const warning of tally.warnings) console.warn(`  ⚠️  ${warning}`);
-
-      // Be polite to the upstream services between subreddits.
-      await new Promise(r => setTimeout(r, 1500));
     } catch (error) {
       console.error(`  ❌ Error on r/${subreddit}: ${error.message}`);
     }
@@ -870,10 +1059,10 @@ async function main() {
   console.log(`\n📊 Total unique codes found: ${uniqueCodes.length}`);
 
   // 3. Filter against existing codes in shiftCodes.ts
-  const { existingCodeStrings, fileContent } = readExistingCodes();
-  console.log(`📁 Existing codes in shiftCodes.ts: ${existingCodeStrings.size}`);
+  const { existingPairs, fileContent } = readExistingCodes();
+  console.log(`📁 Existing code/game rows in shiftCodes.ts: ${existingPairs.size}`);
 
-  const newCodes = uniqueCodes.filter(c => !existingCodeStrings.has(c.code));
+  const newCodes = codesMissingFromVault(uniqueCodes, existingPairs);
   console.log(`✨ New codes to add: ${newCodes.length}`);
 
   if (newCodes.length === 0) {
@@ -898,6 +1087,7 @@ async function main() {
 export {
   decodeEntities,
   detectGame,
+  detectGames,
   detectRewardType,
   extractKeyCount,
   extractRewardLabel,
@@ -909,6 +1099,13 @@ export {
   generateCodeEntry,
   dedupeCodes,
   applyPerRunCap,
+  codesMissingFromVault,
+  fetchWithBackoff,
+  retryDelayMs,
+  parseRetryAfter,
+  shouldRetryStatus,
+  createRequestPacer,
+  shouldFetchHot,
   MAX_NEW_CODES_PER_RUN,
 };
 

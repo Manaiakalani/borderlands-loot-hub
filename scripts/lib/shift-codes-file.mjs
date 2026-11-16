@@ -157,6 +157,21 @@ export function extractExistingCodeStrings(content) {
   return codes;
 }
 
+/**
+ * Returns `CODE::GAME` pairs already present in the file.
+ *
+ * Objects in this file are flat and list `code` before `game`. A code-only
+ * set hides a second game for a code that was already filed under the first.
+ */
+export function extractExistingCodeGamePairs(content) {
+  const pairs = new Set();
+  const pattern = /\{[^{}]*\bcode:\s*['"]([A-Z0-9-]+)['"][^{}]*\bgame:\s*['"]([A-Za-z0-9]+)['"][^{}]*\}/gi;
+  for (const match of content.matchAll(pattern)) {
+    pairs.add(`${match[1].toUpperCase()}::${match[2].toUpperCase()}`);
+  }
+  return pairs;
+}
+
 /** Number of `code:` entries currently in the file. */
 function countCodeEntries(content) {
   return [...content.matchAll(CODE_FIELD_REGEX)].length;
