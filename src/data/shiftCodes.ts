@@ -57,6 +57,22 @@ export const GAME_INFO: Record<GameType, { name: string; shortName: string; colo
  */
 export const mockShiftCodes: ShiftCode[] = [
   // ============================================
+  // REDDIT - Auto-fetched Codes (2026-11-17)
+  // ============================================
+  {
+    id: 'reddit-bl3-3s6b356z5wcfbjcjttbjzw3bw',
+    code: '3S6B3-56Z5W-CFBJC-JTTBJ-ZW3BW',
+    game: 'BL3',
+    status: 'unknown',
+    reward: 'Cosmetic Reward',
+    rewardType: 'skin',
+    source: 'r/Borderlands',
+    addedAt: '2026-11-17',
+    expiresAt: null,
+    isUniversal: false,
+  },
+
+  // ============================================
   // REDDIT - Auto-fetched Codes (2026-11-16)
   // ============================================
   {
