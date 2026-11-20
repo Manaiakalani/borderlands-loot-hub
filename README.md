@@ -1,16 +1,21 @@
-# 🔑 Borderlands SHiFT Vault
-
 <div align="center">
-
-![Borderlands SHiFT Vault](https://img.shields.io/badge/Borderlands-SHiFT%20Vault-gold?style=for-the-badge&logo=playstation&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white)
-
-**A sleek, Borderlands-themed SHiFT code aggregator for Vault Hunters**
-
-[🎮 Live Demo](https://manaiakalani.github.io/borderlands-loot-hub/) • [Report Bug](https://github.com/Manaiakalani/borderlands-loot-hub/issues) • [Request Feature](https://github.com/Manaiakalani/borderlands-loot-hub/issues)
-
+  <img src="docs/assets/logo.svg" alt="Borderlands SHiFT Vault logo" width="96" />
+  <h1>Borderlands SHiFT Vault</h1>
+  <p><strong>A sleek, Borderlands-themed SHiFT code aggregator for Vault Hunters.</strong></p>
+  <p>
+    <a href="https://github.com/Manaiakalani/borderlands-loot-hub/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Manaiakalani/borderlands-loot-hub/ci.yml?label=CI" alt="CI" /></a>
+    <a href="https://github.com/Manaiakalani/borderlands-loot-hub/releases/latest"><img src="https://img.shields.io/github/v/release/Manaiakalani/borderlands-loot-hub" alt="Latest release" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="MIT License" /></a>
+    <a href="https://manaiakalani.github.io/borderlands-loot-hub/"><img src="https://img.shields.io/website?url=https%3A%2F%2Fmanaiakalani.github.io%2Fborderlands-loot-hub%2F" alt="Live site" /></a>
+  </p>
+  <p>
+    <a href="https://manaiakalani.github.io/borderlands-loot-hub/">Live demo</a>
+    ·
+    <a href="#-features">Features</a>
+    ·
+    <a href="#-getting-started">Getting started</a>
+  </p>
+  <img src="docs/assets/hero.png" alt="Borderlands SHiFT Vault screenshot" width="800" />
 </div>
 
 ---
