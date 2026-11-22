@@ -20,7 +20,7 @@ const BASE = '/borderlands-loot-hub';
  */
 const redirectScript = (() => {
   const html = readFileSync('public/404.html', 'utf-8');
-  const match = html.match(/<script>([\s\S]*?)<\/script>/);
+  const match = html.match(/<script>([\s\S]*?)<\/script>/i);
   if (!match) throw new Error('public/404.html no longer contains an inline <script>');
   return match[1];
 })();

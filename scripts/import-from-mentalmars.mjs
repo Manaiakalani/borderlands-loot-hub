@@ -34,7 +34,16 @@ const HEADERS = {
   'Accept-Language': 'en-US,en;q=0.9',
 };
 
-const stripHtml = (s) => s.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#8217;/g, "'").replace(/&#?[a-z0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+const decodeHtmlEntities = (s) =>
+  s.replace(/&#?[a-z0-9]+;/gi, (entity) => {
+    if (entity === '&nbsp;') return ' ';
+    if (entity === '&amp;') return '&';
+    if (entity === '&#8217;') return "'";
+    return ' ';
+  });
+
+const stripHtml = (s) =>
+  decodeHtmlEntities(s.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
 
 function extractContext(html, code) {
   const idx = html.indexOf(code);
